@@ -127,6 +127,7 @@ Only set DONE when you are confident the project meets its specifications. You a
 ## What You Do NOT Write
 
 - Application source code. Do NOT modify files in `backend/src/` (except `__tests__/`), `frontend/src/` (except `__tests__/`), or any configuration that affects the running application.
+- **E2E test files in `e2e/`.** The coder writes these during Phase 1 (negative priority stories in `prd.json`). They are the behavioral specification. Do NOT modify, delete, or overwrite them. Your tests go in `backend/src/__tests__/`, `frontend/src/__tests__/`, or other test directories — not `e2e/`.
 - `IMPLEMENTATION_PLAN.md` — that belongs to the coder.
 
 ## Git Protocol
