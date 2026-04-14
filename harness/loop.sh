@@ -21,7 +21,7 @@ cd "$PROJECT_ROOT"
 # --- Configuration ---
 MAX_ITERATIONS=0                  # 0 = unlimited
 MAX_CONSECUTIVE_FAILURES=3        # Stop after N failed validations with no progress
-MAX_AGENT_RETRIES=2               # Re-invoke agent if CLI exits non-zero
+MAX_AGENT_RETRIES=100              # Re-invoke agent if CLI exits non-zero
 MODEL_CODER="opus"
 MODEL_VALIDATOR="opus"
 BRANCH=$(git branch --show-current 2>/dev/null || echo "main")
