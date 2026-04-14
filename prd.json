@@ -1,7 +1,7 @@
 {
   "project": "MiniPanel",
   "branchName": "ralph/minipanel",
-  "description": "MiniPanel — A self-hosted analytics platform. Test-first harness: Phase 1 (priority < 0) writes Playwright E2E and API contract tests. Phase 2 (priority >= 1) implements the application — each story must pass its mapped tests. Do NOT modify files in e2e/.",
+  "description": "MiniPanel \u2014 A self-hosted analytics platform for product teams. Covers Foundation (event collection, identity resolution, sample data, app shell), MVP (event exploration, trend analysis), MMP (numeric aggregations, dimensional breakdowns, comparative charts, funnel analysis, user profiles, visual polish), and Nice-to-haves (saved analyses, autocomplete, multi-event comparison).",
   "userStories": [
     {
       "id": "US-T00",
