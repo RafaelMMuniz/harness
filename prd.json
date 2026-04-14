@@ -1,0 +1,715 @@
+{
+  "project": "MiniPanel",
+  "branchName": "ralph/minipanel",
+  "description": "MiniPanel \u2014 A self-hosted analytics platform for product teams. Covers Foundation (event collection, identity resolution, sample data, app shell), MVP (event exploration, trend analysis), MMP (numeric aggregations, dimensional breakdowns, comparative charts, funnel analysis, user profiles, visual polish), and Nice-to-haves (saved analyses, autocomplete, multi-event comparison).",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Initialize project with monorepo structure",
+      "description": "As a developer, I need the project scaffolded with the chosen tech stack so that all subsequent stories have a working build pipeline.",
+      "acceptanceCriteria": [
+        "Project root contains a package.json with a single 'npm run dev' command that starts both backend and frontend concurrently",
+        "Backend: Express.js + TypeScript in a 'server/' directory, compiles and starts on port 3001",
+        "Frontend: React + Vite + TypeScript + TailwindCSS in a 'client/' directory, starts on port 5173 and proxies API requests to backend",
+        "Shadcn UI initialized in client with at least one component (Button) available",
+        "lucide-react installed and importable in client",
+        "Zod installed and importable in server",
+        "Playwright installed with a placeholder test file in 'e2e/' that passes",
+        "A single 'npm install' at the root installs all dependencies (workspaces or similar)",
+        "README.md documents: 'npm install && npm run dev' as the single start command",
+        "Typecheck passes for both client and server"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "This is the skeleton. Keep it minimal \u2014 no business logic yet. Use npm workspaces or a simple concurrently setup."
+    },
+    {
+      "id": "US-002",
+      "title": "Set up SQLite database with connection and schema management",
+      "description": "As a developer, I need a SQLite database that initializes automatically on startup so that subsequent stories can persist data.",
+      "acceptanceCriteria": [
+        "Server uses better-sqlite3 (synchronous) or sqlite3 package to create/open a local 'minipanel.db' file in the project root",
+        "Database file is gitignored",
+        "A schema initialization function runs on server startup and creates tables if they do not exist",
+        "Events table created with columns: id (INTEGER PRIMARY KEY AUTOINCREMENT), event_name (TEXT NOT NULL), device_id (TEXT), user_id (TEXT), timestamp (TEXT NOT NULL), properties (TEXT, stores JSON string)",
+        "Identity mappings table created with columns: id (INTEGER PRIMARY KEY AUTOINCREMENT), device_id (TEXT NOT NULL UNIQUE), user_id (TEXT NOT NULL), created_at (TEXT NOT NULL)",
+        "Server starts successfully with the database initialized and logs a confirmation message",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Use better-sqlite3 for simplicity (synchronous API, no native build issues on most systems). Store properties as a JSON string. The UNIQUE constraint on device_id in the identity_mappings table enforces the one-device-to-one-user rule."
+    },
+    {
+      "id": "US-003",
+      "title": "Implement event ingestion API endpoint",
+      "description": "As a developer instrumenting an app, I need to POST events to MiniPanel so they are stored and available for querying.",
+      "acceptanceCriteria": [
+        "POST /api/events accepts a JSON body with fields: event (string, required), device_id (string, optional), user_id (string, optional), timestamp (string, optional ISO 8601), properties (object, optional)",
+        "Request body is validated with Zod: event name is required and non-empty, at least one of device_id or user_id must be present",
+        "If timestamp is omitted, server sets it to current UTC time in ISO 8601 format",
+        "Valid events are inserted into the events table and return 201 with the stored event object including its generated id",
+        "Invalid events return 400 with a JSON error body containing a human-readable message describing what is missing or wrong",
+        "If the event contains both device_id and user_id, an identity mapping is created or confirmed (INSERT OR IGNORE into identity_mappings)",
+        "If the event contains both device_id and user_id, and that device_id is already mapped to a DIFFERENT user_id in identity_mappings, reject the event with HTTP 409 and body: { error: 'device_id is already mapped to a different user' }. Do NOT insert the event.",
+        "Properties object is serialized to a JSON string before storage",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Identity mapping creation here is a side effect of event ingestion \u2014 it's the core of the simplified merge model. INSERT OR IGNORE handles the case where the mapping already exists. Check for identity conflict BEFORE inserting the event."
+    },
+    {
+      "id": "US-004",
+      "title": "Implement batch event ingestion endpoint",
+      "description": "As a developer, I need to send multiple events in a single request so that high-volume ingestion is efficient.",
+      "acceptanceCriteria": [
+        "POST /api/events/batch accepts a JSON body with field: events (array of event objects, same schema as single event)",
+        "Validated with Zod: array must have at least 1 event and at most 1000",
+        "Each event in the array is validated individually with the same rules as POST /api/events",
+        "All valid events in the batch are inserted in a single SQLite transaction for performance",
+        "Identity mappings are created for any events with both device_id and user_id",
+        "If an event in the batch would create a device_id mapping that conflicts with an existing mapping (device already mapped to a different user), that individual event is skipped and reported in the errors array \u2014 it does NOT abort the entire batch",
+        "Returns 200 with a JSON body: { accepted: number, errors: Array<{ index: number, message: string }> }",
+        "If any individual event fails validation or has an identity conflict, it is skipped (not inserted) and reported in the errors array, but the rest of the batch succeeds",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "This is essential for the sample data seeder (US-008) to run fast. Wrap the whole insert loop in a transaction."
+    },
+    {
+      "id": "US-005",
+      "title": "Implement identity resolution query logic",
+      "description": "As a product analyst, I need all queries to use resolved identities so that anonymous and known events for the same person are unified.",
+      "acceptanceCriteria": [
+        "A resolveIdentity(deviceOrUserId: string) function exists that: given a user_id, returns that user_id; given a device_id, looks up the identity_mappings table and returns the mapped user_id if one exists, otherwise returns the device_id as-is",
+        "A getEventsForUser(userId: string) function exists that returns all events attributed to a resolved user: events where user_id matches, PLUS events where device_id is mapped to that user_id via identity_mappings",
+        "GET /api/events?user_id=<id> returns all resolved events for that user, sorted by timestamp ascending (oldest first \u2014 this is the user timeline view, distinct from the paginated list in US-007 which sorts descending/newest first)",
+        "GET /api/events?device_id=<id> resolves the device to a user (if mapping exists) and returns all events for that resolved user, sorted by timestamp ascending",
+        "Response includes an array of event objects with parsed properties (JSON object, not string)",
+        "The merge is retroactive: events recorded before the identity mapping was created are included",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "This is the most critical story. The SQL query for getEventsForUser needs to join events with identity_mappings: SELECT * FROM events WHERE user_id = ? OR device_id IN (SELECT device_id FROM identity_mappings WHERE user_id = ?). Test the retroactive merge carefully."
+    },
+    {
+      "id": "US-006",
+      "title": "Write automated tests for identity resolution",
+      "description": "As a developer, I need automated tests that verify identity resolution correctness so that the most critical invariant of the system is protected against regressions.",
+      "acceptanceCriteria": [
+        "Test file exists at server/src/__tests__/identity-resolution.test.ts (or similar path using vitest or jest)",
+        "Test runner is configured and 'npm test' in the server workspace runs the tests",
+        "Test 1 - Retroactive merge: send 4 anonymous events for device-X, then send 1 event with both device-X and user-Y, query events for user-Y, assert all 5 events are returned",
+        "Test 2 - Multi-device merge: send anonymous events for device-A and device-B, link device-A to user-Z, link device-B to user-Z, query events for user-Z, assert events from both devices appear",
+        "Test 3 - Device collision rejection: link device-C to user-P, attempt to link device-C to user-Q, assert the second mapping is rejected (409 or error)",
+        "Test 4 - Unidentified device: send anonymous events for device-D (no mapping), query by device-D, assert only device-D events are returned with device-D as the identity",
+        "All tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "These tests directly mirror the 'How to verify' section of BR-101. Use a fresh in-memory SQLite database per test to avoid test pollution. This satisfies the hard constraint: 'The codebase must include at least one automated test that verifies identity resolution.'"
+    },
+    {
+      "id": "US-007",
+      "title": "Implement event listing API with filters",
+      "description": "As a product analyst, I need to query events by name, time range, and identity so I can explore what happened in my product.",
+      "acceptanceCriteria": [
+        "GET /api/events returns paginated events sorted by timestamp descending (newest first)",
+        "Supports query parameters: event_name (filter by exact event name), user_id (resolved identity filter), device_id (resolved identity filter), start_date (ISO 8601, inclusive), end_date (ISO 8601, inclusive), limit (default 50, max 1000), offset (default 0)",
+        "All filters are optional and combinable",
+        "Response body: { events: Event[], total: number, limit: number, offset: number }",
+        "Events in response have properties parsed from JSON string to object",
+        "Identity resolution is applied: if filtering by user_id, events from all mapped devices are included",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "This is the read API that powers the frontend event explorer. Build the SQL query dynamically based on which filters are provided."
+    },
+    {
+      "id": "US-008",
+      "title": "Build sample data seeder script",
+      "description": "As a new user trying MiniPanel, I need realistic demo data loaded so I can explore the product without instrumenting my own app first.",
+      "acceptanceCriteria": [
+        "A script at 'scripts/seed.ts' (or similar) can be run via 'npm run seed' from the project root",
+        "Generates at least 5 distinct event types: Page Viewed, Button Clicked, Sign Up Completed, Purchase Completed, Subscription Renewed",
+        "Generates at least 50 resolved users (users with a user_id) and additional anonymous-only device IDs",
+        "Generates at least 10,000 events spread over the last 30 days",
+        "Distribution is non-uniform: some users have 500+ events, most have 50-200, power-law or similar distribution",
+        "Event types are non-uniform: Page Viewed is most common (~40%), Button Clicked (~25%), Sign Up Completed (~15%), Purchase Completed (~12%), Subscription Renewed (~8%)",
+        "Includes identity resolution scenarios: at least 20 users start as anonymous (device-only) and later identify, at least 5 users have 2+ devices, at least 10 device IDs never get mapped to a user",
+        "Events include string properties (url, referrer, button_name, plan_type) and numeric properties (amount, duration_seconds, quantity) appropriate to each event type",
+        "Seeder calls the batch API endpoint (POST /api/events/batch) or directly inserts into the database",
+        "Running the seeder twice does not duplicate data (clears existing data first or is idempotent)",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "The seeder should be deterministic (use a fixed seed for the random number generator) so results are reproducible. Direct database insertion is fine and will be much faster than HTTP calls for 10k events."
+    },
+    {
+      "id": "US-009",
+      "title": "Build application shell with navigation layout",
+      "description": "As a user opening MiniPanel, I need a clean application shell with sidebar navigation so I can move between the main areas of the product.",
+      "acceptanceCriteria": [
+        "App renders a responsive layout with a fixed sidebar on the left and a main content area on the right",
+        "Sidebar contains navigation links with lucide-react icons for: Events (Activity icon), Funnels (Filter icon, links to placeholder), Users (Users icon, links to placeholder), Settings (Settings icon, links to placeholder)",
+        "React Router is set up with routes for each navigation item",
+        "Active navigation item is visually highlighted",
+        "Placeholder pages display the page title in the main content area for routes not yet implemented",
+        "Application title 'MiniPanel' appears at the top of the sidebar",
+        "Layout uses Tailwind CSS and looks clean on screens 1024px and wider",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "Use shadcn/ui components where appropriate (e.g., Button for nav items, or a simple custom sidebar). Keep it minimal \u2014 this is the shell, not the feature pages. Funnels, Users, and Settings are placeholders for future tiers."
+    },
+    {
+      "id": "US-010",
+      "title": "Build event explorer page with table and filters",
+      "description": "As a product analyst, I need a page where I can browse events, filter by name and time range, and see event details so I can verify data and explore user behavior.",
+      "acceptanceCriteria": [
+        "Events page is accessible from the sidebar navigation",
+        "Displays a table of events with columns: Timestamp, Event Name, User (resolved identity), Properties (truncated preview)",
+        "Table loads data from GET /api/events on mount",
+        "Filter bar above the table with: event name dropdown (populated from distinct event names in the data), date range picker (start and end date inputs), a search/filter button",
+        "Filters update the API query parameters and reload the table",
+        "Clicking a row expands it or opens a detail panel showing all event properties formatted as key-value pairs",
+        "Pagination controls at the bottom (Previous / Next) using offset-based pagination",
+        "Loading state shown while fetching data",
+        "Empty state shown when no events match the filters",
+        "Uses shadcn/ui Table component and lucide-react icons",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": "This is the primary interface for the developer persona (verifying event flow) and the analyst persona (exploring data). Keep the UI functional, not flashy."
+    },
+    {
+      "id": "US-011",
+      "title": "Add distinct event names and basic stats API endpoints",
+      "description": "As a frontend developer, I need API endpoints that return distinct event names and basic event counts so the UI filter dropdowns and summary stats can be populated.",
+      "acceptanceCriteria": [
+        "GET /api/events/names returns an array of distinct event names sorted alphabetically",
+        "GET /api/stats/overview returns a JSON object with: total_events (number), total_users (number of distinct resolved user identities), event_counts_by_name (object mapping event name to count), date_range (object with earliest and latest event timestamps)",
+        "Total users count uses resolved identities: anonymous devices mapped to a user are not counted separately",
+        "Responses are fast (< 500ms) on the sample dataset of 10k events",
+        "Typecheck passes"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": "These endpoints support the event explorer filters and could support a future dashboard. Keep the SQL simple \u2014 COUNT, DISTINCT, GROUP BY."
+    },
+    {
+      "id": "US-012",
+      "title": "Add user lookup page for individual user activity",
+      "description": "As a support lead, I need to look up a specific user by their ID and see their complete event history so I can understand what happened during their session.",
+      "acceptanceCriteria": [
+        "Users page is accessible from the sidebar navigation",
+        "Shows a search input where the user can enter a user_id or device_id",
+        "On search, calls GET /api/events?user_id=<id> (or device_id) and displays the resolved user's complete event timeline",
+        "Timeline displays events in chronological order (oldest first) with: timestamp, event name, all properties expanded",
+        "Shows the resolved identity at the top: 'User: <resolved_id>' with a list of associated device IDs from identity_mappings",
+        "GET /api/users/:id endpoint returns user profile data: resolved user_id, list of mapped device_ids, total event count, first_seen and last_seen timestamps",
+        "Empty state when no user/device is found with that ID",
+        "Uses shadcn/ui components (Input, Card, Table)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": "This serves the support lead persona. The user profile endpoint is new \u2014 it aggregates identity_mappings and events for a single resolved user."
+    },
+    {
+      "id": "US-013",
+      "title": "Write Playwright end-to-end test for full event lifecycle",
+      "description": "As a developer, I need an end-to-end test that verifies the complete flow from event ingestion through identity resolution to the UI so I can confidently ship changes.",
+      "acceptanceCriteria": [
+        "Playwright test file at e2e/event-lifecycle.spec.ts",
+        "Test seeds a small set of events via the API (anonymous events, then an identify event linking device to user)",
+        "Test navigates to the Events page and verifies the events appear in the table",
+        "Test uses the user lookup to search for the identified user and verifies all events (including pre-identification anonymous events) appear in the timeline",
+        "Test passes when run via 'npx playwright test'",
+        "Playwright config starts the dev server automatically before tests",
+        "Typecheck passes"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": "This is the integration-level verification. Keep it focused on the happy path \u2014 the unit tests in US-006 cover edge cases."
+    },
+    {
+      "id": "US-014",
+      "title": "Final polish: README, error handling, and startup experience",
+      "description": "As a new user, I need clear setup instructions and a smooth first-run experience so I can get MiniPanel working without guessing.",
+      "acceptanceCriteria": [
+        "README.md contains: project description (one paragraph), prerequisites (Node.js version), setup instructions (npm install, npm run seed, npm run dev), explanation of what each command does",
+        "Running 'npm run dev' on a fresh clone (after npm install) starts without errors even if the database does not exist yet (auto-creates it)",
+        "If the database is empty, the Events page shows a friendly empty state with a hint to run 'npm run seed'",
+        "API endpoints return consistent error response format: { error: string, details?: string }",
+        "Server logs incoming requests with method, path, and status code (simple middleware)",
+        "No unhandled promise rejections or uncaught exceptions crash the server",
+        "Typecheck passes"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": "This is the cleanup story. Don't add new features \u2014 just make everything that exists work smoothly. The README is the 'single documented command' requirement from BR-103."
+    },
+    {
+      "id": "US-015",
+      "title": "Add trend aggregation API endpoint",
+      "description": "As a product analyst, I need an API that returns event counts grouped by time bucket so the frontend can render trend charts.",
+      "acceptanceCriteria": [
+        "GET /api/trends returns time-bucketed event counts",
+        "Required query parameter: event_name (string, the event type to aggregate)",
+        "Optional query parameters: start_date (ISO 8601, default 30 days ago), end_date (ISO 8601, default now), granularity ('day' | 'week', default 'day')",
+        "Request is validated with Zod: event_name is required and non-empty, granularity must be 'day' or 'week', start_date must be before end_date if both are provided",
+        "Returns 400 with descriptive error if validation fails",
+        "Response body: { event_name: string, granularity: string, start_date: string, end_date: string, data: Array<{ date: string, total_count: number, unique_users: number }> }",
+        "Each entry in data represents one time bucket (one day or one week starting Monday)",
+        "total_count is the number of events in that bucket",
+        "unique_users is the count of distinct resolved identities in that bucket \u2014 anonymous devices that are mapped to a user_id via identity_mappings are counted under that user_id, not separately",
+        "Time buckets with zero events are included in the response with total_count: 0 and unique_users: 0 (no gaps in the series)",
+        "Typecheck passes"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": "The unique_users calculation is the hard part. The SQL needs to resolve identities before counting distinct: for each event, use COALESCE(im.user_id, e.user_id, e.device_id) as the resolved ID, where im is a LEFT JOIN on identity_mappings. Then COUNT(DISTINCT resolved_id). For weekly buckets, use strftime to truncate to ISO week start (Monday). Zero-fill by generating all expected buckets in application code and merging with query results."
+    },
+    {
+      "id": "US-016",
+      "title": "Add date range preset helper and validation",
+      "description": "As a frontend developer, I need a shared utility for date range presets so the trend page and future features use consistent time ranges.",
+      "acceptanceCriteria": [
+        "A shared utility module exists in the client (e.g., client/src/lib/date-presets.ts)",
+        "Exports a DATE_PRESETS array with objects: { label: string, value: string, getDates: () => { start: Date, end: Date } }",
+        "Presets include: 'Last 7 days', 'Last 30 days', 'Last 90 days', 'Custom'",
+        "'Custom' preset returns null dates indicating the user must pick manually",
+        "Each preset calculates dates relative to the current date at call time",
+        "Exports a formatDateForAPI(date: Date): string function that returns ISO 8601 date string (YYYY-MM-DD)",
+        "Typecheck passes"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": "Keep this pure \u2014 no React dependencies. This is a utility module that the Trends page component will import."
+    },
+    {
+      "id": "US-017",
+      "title": "Build trends page layout with controls",
+      "description": "As a product analyst, I need a Trends page with event selector, date range picker, and granularity toggle so I can configure what I want to analyze.",
+      "acceptanceCriteria": [
+        "New 'Trends' route added to the router, accessible from the sidebar navigation with a TrendingUp (or BarChart3) lucide-react icon",
+        "Page heading: 'Trends'",
+        "Control bar at the top contains: event name selector (dropdown populated from GET /api/events/names), date range preset selector (dropdown with 'Last 7 days', 'Last 30 days', 'Last 90 days', 'Custom'), custom date inputs (start and end date pickers, visible only when 'Custom' is selected), granularity toggle ('Day' | 'Week' buttons or segmented control)",
+        "Default state on load: no event selected, date range 'Last 30 days', granularity 'Day'",
+        "When no event is selected, the chart area shows a prompt: 'Select an event to see its trend'",
+        "Selecting an event triggers an API call to GET /api/trends with the current control values",
+        "Changing any control (event, date range, granularity) re-fetches data automatically",
+        "Loading spinner or skeleton shown while data is being fetched",
+        "Uses shadcn/ui Select, Button, and Input components",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": "Don't render the chart yet \u2014 that's US-004. This story focuses on the layout, controls, and API wiring. Show raw data or a placeholder where the chart will go."
+    },
+    {
+      "id": "US-018",
+      "title": "Render time series chart with Recharts",
+      "description": "As a product analyst, I need to see event trends as a line chart so I can visually spot patterns and changes over time.",
+      "acceptanceCriteria": [
+        "Install recharts in the client workspace",
+        "Trends page renders a responsive line chart using Recharts (ResponsiveContainer + LineChart)",
+        "Chart X-axis shows dates from the API response, formatted readably (e.g., 'Jan 5' for daily, 'Jan 5 - Jan 11' for weekly)",
+        "Chart has two lines: one for total_count (labeled 'Total Events') and one for unique_users (labeled 'Unique Users')",
+        "Lines use distinct colors that are accessible (e.g., blue for total, green for unique)",
+        "Chart includes a Tooltip that shows the exact values on hover: date, total events count, unique users count",
+        "Chart includes a Legend identifying both lines",
+        "Chart Y-axis auto-scales based on data and starts at 0",
+        "When the API returns all zeroes, chart still renders with the zero line visible and a subtle message: 'No events found in this range'",
+        "Chart is responsive and fills the available width",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": "Use Recharts LineChart \u2014 it's already available in the Claude artifact environment and is a well-known React charting library. The two-line chart is the key verification for identity resolution in aggregations: unique_users should be lower than total_count when users trigger the same event multiple times."
+    },
+    {
+      "id": "US-019",
+      "title": "Verify event explorer covers BR-200 requirements",
+      "description": "As a developer, I need to confirm and fix any gaps between the existing event explorer (from Tier 1) and the BR-200 specification.",
+      "acceptanceCriteria": [
+        "Events page shows events in reverse chronological order (newest first) \u2014 verify this is the default sort and fix if not",
+        "Each event row displays: timestamp (human-readable format), event name, resolved identity (show user_id if resolved, device_id if anonymous, with a visual indicator for anonymous), all properties (visible on expand or in detail panel)",
+        "Filtering by event name works: selecting an event name from the dropdown shows only matching events",
+        "Pagination works: 'Previous' and 'Next' controls navigate through large datasets without loading all events at once",
+        "Sending an event via the API and then refreshing the events page shows the new event at the top of the list",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": "This is a gap-check story. Most of BR-200 was implemented in Tier 1 (US-007 and US-010). This story verifies everything works end-to-end and fixes any issues. The key addition is making sure the resolved identity column is clear \u2014 show a label like 'user: abc' vs 'device: xyz (anonymous)' so the developer can verify identity resolution at a glance."
+    },
+    {
+      "id": "US-020",
+      "title": "Write automated tests for trend aggregation",
+      "description": "As a developer, I need tests for the trend API to verify that time bucketing, zero-filling, and identity-resolved unique counts are correct.",
+      "acceptanceCriteria": [
+        "Test file at server/src/__tests__/trends.test.ts",
+        "Test 1 - Daily bucketing: insert events across 3 different days for the same event type, call GET /api/trends with daily granularity, assert each day has the correct total_count and that all days in the range are present (including zero-count days)",
+        "Test 2 - Weekly bucketing: insert events across 2 different weeks, call GET /api/trends with weekly granularity, assert events are grouped into the correct week buckets",
+        "Test 3 - Unique users with identity resolution: insert 5 events from device-A (anonymous), create identity mapping linking device-A to user-B, insert 3 more events from user-B directly, call GET /api/trends, assert unique_users counts user-B as ONE user not two, while total_count is 8",
+        "Test 4 - Zero-fill gaps: insert events only on day 1 and day 5 of a 7-day range, assert response contains 7 entries with days 2-4 and 6-7 having total_count: 0",
+        "Test 5 - Date range filtering: insert events outside the requested range, assert they are excluded from results",
+        "All tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": "Test 3 is the critical one \u2014 it validates that identity resolution works in aggregations (BR-201 verification point 2). Use in-memory SQLite per test."
+    },
+    {
+      "id": "US-021",
+      "title": "Write Playwright E2E test for trend analysis flow",
+      "description": "As a developer, I need an end-to-end test that verifies the full trend analysis workflow from the UI.",
+      "acceptanceCriteria": [
+        "Playwright test file at e2e/trends.spec.ts",
+        "Test seeds events via the API (at least 2 event types, spread over multiple days)",
+        "Test navigates to the Trends page",
+        "Test selects an event from the dropdown and verifies the chart renders (chart SVG or canvas element is visible)",
+        "Test changes granularity to 'Week' and verifies the chart updates (fewer data points than daily)",
+        "Test changes date range to 'Last 7 days' and verifies the chart updates",
+        "Test passes when run via 'npx playwright test'",
+        "Typecheck passes"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": "Keep assertions practical \u2014 verify the chart element renders and updates on interaction, don't try to read exact pixel values from the chart. Check for the presence of Recharts SVG elements or specific tooltip text on hover."
+    },
+    {
+      "id": "US-022",
+      "title": "Add property metadata API for numeric detection",
+      "description": "As a frontend developer, I need an API that tells me which properties exist for a given event type and whether they are numeric, so the UI can offer appropriate aggregation options.",
+      "acceptanceCriteria": [
+        "GET /api/events/:eventName/properties returns an array of property descriptors for that event type",
+        "Each descriptor has: { name: string, type: 'string' | 'number' | 'boolean', sample_values: string[] }",
+        "Type detection logic: scan a sample of recent events (up to 500) for the given event name, for each property key check if all non-null values parse as numbers \u2014 if yes, type is 'number'; if all are 'true'/'false', type is 'boolean'; otherwise 'string'",
+        "sample_values contains up to 10 distinct values for that property (useful for breakdown selectors)",
+        "Properties with no values across all sampled events are excluded",
+        "Response is fast (< 500ms) on the sample dataset",
+        "Typecheck passes"
+      ],
+      "priority": 22,
+      "passes": false,
+      "notes": "This powers BR-300 (only offer numeric aggregations for numeric properties) and BR-302 (breakdown by property value). Since properties are stored as a JSON string, you need to parse them in SQL or application code. Application-side parsing of a sample is simplest for SQLite."
+    },
+    {
+      "id": "US-023",
+      "title": "Extend trend API with numeric aggregation measures",
+      "description": "As a product analyst, I need the trend API to support sum, average, min, and max of numeric properties so I can measure things like revenue and average order value over time.",
+      "acceptanceCriteria": [
+        "GET /api/trends now accepts an additional optional query parameter: measure (string, one of 'total_count' | 'unique_users' | 'sum' | 'avg' | 'min' | 'max', default 'total_count')",
+        "When measure is 'sum', 'avg', 'min', or 'max', a second required parameter is needed: property (string, the property key to aggregate)",
+        "Validated with Zod: if measure is a numeric aggregation, property must be non-empty; if measure is 'total_count' or 'unique_users', property is ignored",
+        "Returns 400 if property is specified but contains non-numeric values for the given event type",
+        "Response data array entries become: { date: string, value: number } where value is the result of the selected measure for that time bucket",
+        "For 'sum': sum of the property values across all events in the bucket",
+        "For 'avg': average of the property values across all events in the bucket",
+        "For 'min': minimum property value in the bucket",
+        "For 'max': maximum property value in the bucket",
+        "Buckets with no events return value: 0 for sum, and value: null for avg/min/max (to distinguish 'no data' from 'zero')",
+        "Existing total_count and unique_users measures continue to work as before (backward compatible)",
+        "Typecheck passes"
+      ],
+      "priority": 23,
+      "passes": false,
+      "notes": "Since properties are stored as a JSON string column, you'll need to extract the value with json_extract(properties, '$.' || property_name) in SQLite. Cast to REAL for aggregation. Handle NULL and missing property gracefully."
+    },
+    {
+      "id": "US-024",
+      "title": "Extend trend API with dimensional breakdown",
+      "description": "As a product analyst, I need to break down any trend analysis by a property value so I can see separate series for each value (e.g., revenue by plan type).",
+      "acceptanceCriteria": [
+        "GET /api/trends now accepts an additional optional parameter: breakdown_by (string, a property key)",
+        "When breakdown_by is provided, instead of a single data array, the response returns: { ..., series: Array<{ key: string, data: Array<{ date: string, value: number }> }> }",
+        "Each entry in series represents one distinct value of the breakdown property",
+        "The series are limited to the top 5 values by total volume (sum of the measure across all time buckets), and all remaining values are grouped into an '__other__' series",
+        "Breakdown works with all measures: total_count, unique_users, sum, avg, min, max",
+        "When breakdown_by is not provided, the response uses the existing flat data array format (backward compatible)",
+        "Zero-fill applies to each series independently (all series have entries for all time buckets)",
+        "Typecheck passes"
+      ],
+      "priority": 24,
+      "passes": false,
+      "notes": "This is BR-302. The SQL gets complex: GROUP BY both time bucket and property value, then rank by total volume in application code to determine top 5 vs __other__. Do the ranking and regrouping in TypeScript, not SQL."
+    },
+    {
+      "id": "US-025",
+      "title": "Add funnel analysis API endpoint",
+      "description": "As a growth manager, I need an API that computes funnel conversion rates for a sequence of events using resolved identities.",
+      "acceptanceCriteria": [
+        "POST /api/funnels/query accepts a JSON body: { steps: string[] (2-5 event names), start_date: string (ISO 8601), end_date: string (ISO 8601) }",
+        "Validated with Zod: steps must have 2-5 entries, each non-empty string; start_date required; end_date required and must be after start_date",
+        "The funnel uses resolved identities: for each event, resolve the identity via identity_mappings (same logic as trend unique_users)",
+        "A user 'converts' through step N if they performed the step N event AFTER performing the step N-1 event (by timestamp), within the date range",
+        "Response body: { steps: Array<{ event_name: string, count: number, conversion_rate: number, drop_off: number }>, overall_conversion_rate: number }",
+        "steps[0].count is the number of distinct resolved users who performed the first event in the date range",
+        "steps[0].conversion_rate is always 1.0 (100%)",
+        "steps[N].conversion_rate is steps[N].count / steps[0].count (relative to funnel entry, not previous step)",
+        "steps[N].drop_off is steps[N-1].count - steps[N].count",
+        "overall_conversion_rate is steps[last].count / steps[0].count",
+        "A user who performs step 1 anonymously and step 2 after identity merge is counted as ONE user progressing (not a dropout)",
+        "Typecheck passes"
+      ],
+      "priority": 25,
+      "passes": false,
+      "notes": "This is the most algorithmically complex endpoint. Algorithm: 1) For each step, get all (resolved_user, timestamp) pairs. 2) Starting from step 1 users, for each subsequent step, find users who appear in the next step with a later timestamp. 3) Only users who completed all previous steps can be counted in the next step. Use Sets for efficient intersection. The identity resolution JOIN is the same pattern as trends."
+    },
+    {
+      "id": "US-026",
+      "title": "Update trends page with measure and property selectors",
+      "description": "As a product analyst, I need UI controls to choose what I'm measuring (count, unique users, sum, avg, min, max) and which property to aggregate, so I can analyze numeric properties.",
+      "acceptanceCriteria": [
+        "Trends page control bar adds a 'Measure' dropdown with options: Total Count, Unique Users, Sum, Average, Min, Max",
+        "When Sum, Average, Min, or Max is selected, a 'Property' dropdown appears next to it, populated from GET /api/events/:eventName/properties filtered to only numeric properties",
+        "When Total Count or Unique Users is selected, the Property dropdown is hidden",
+        "Changing the measure or property re-fetches trend data with the new parameters",
+        "The chart Y-axis label updates to reflect the measure (e.g., 'Total Events', 'Unique Users', 'Sum of amount')",
+        "If no numeric properties exist for the selected event, Sum/Avg/Min/Max options are disabled in the dropdown with a tooltip: 'No numeric properties available'",
+        "Default measure remains 'Total Count'",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 26,
+      "passes": false,
+      "notes": "The Property dropdown should only fetch when the event name changes. Cache the property metadata per event name in component state to avoid redundant API calls."
+    },
+    {
+      "id": "US-027",
+      "title": "Add breakdown selector to trends page",
+      "description": "As a product analyst, I need a 'Break down by' dropdown on the trends page so I can split the chart into multiple series by a property value.",
+      "acceptanceCriteria": [
+        "Trends page adds a 'Break down by' dropdown in the control bar, populated from GET /api/events/:eventName/properties (all types, not just numeric)",
+        "Dropdown includes a 'None' option (default) that shows the single-series view",
+        "When a breakdown property is selected, the API request includes breakdown_by parameter",
+        "The chart renders multiple lines (one per series key) with distinct colors from a predefined palette of at least 6 colors",
+        "A legend below or beside the chart shows the series key and its color",
+        "The '__other__' series is rendered in gray and listed last in the legend",
+        "Tooltip shows values for all visible series at the hovered date",
+        "Changing the breakdown re-fetches and re-renders the chart",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 27,
+      "passes": false,
+      "notes": "When breakdown is active, the response format changes from flat data[] to series[]. The chart component needs to handle both shapes. Use Recharts' multi-Line approach: map over series and render a <Line> for each."
+    },
+    {
+      "id": "US-028",
+      "title": "Add chart type switcher for comparative visualization",
+      "description": "As a product analyst, I need to switch between line, bar, and area charts for the same data so I can choose the visualization that best fits my question.",
+      "acceptanceCriteria": [
+        "Trends page adds a chart type toggle in the control bar with three options represented by lucide-react icons: LineChart (line), BarChart3 (bar), AreaChart (area)",
+        "Line chart: renders as Recharts LineChart (existing default behavior)",
+        "Bar chart: renders as Recharts BarChart with the same data, colors, and tooltip",
+        "Area chart: renders as Recharts AreaChart with semi-transparent fills under each line",
+        "Switching chart type does NOT re-fetch data \u2014 it only changes the rendering",
+        "All three chart types work with both single-series and breakdown (multi-series) views",
+        "Default chart type is 'line'",
+        "Selected chart type is visually highlighted in the toggle",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 28,
+      "passes": false,
+      "notes": "Abstract the chart data mapping into a shared component or hook so all three chart types use the same data transformation. The main difference is which Recharts component is rendered: LineChart vs BarChart vs AreaChart."
+    },
+    {
+      "id": "US-029",
+      "title": "Build funnel analysis page with step builder",
+      "description": "As a growth manager, I need a Funnels page where I can define a sequence of events and see conversion rates between steps.",
+      "acceptanceCriteria": [
+        "New 'Funnels' route replaces the placeholder, accessible from sidebar with the Filter lucide-react icon",
+        "Page heading: 'Funnel Analysis'",
+        "Step builder section: user can add 2-5 event steps, each is a dropdown populated from GET /api/events/names",
+        "Add Step button (disabled when 5 steps exist), Remove Step button on each step (disabled when 2 steps remain)",
+        "Steps are numbered (Step 1, Step 2, etc.) and displayed vertically",
+        "Date range selector with the same presets as the Trends page (Last 7 days, Last 30 days, Last 90 days, Custom)",
+        "An 'Analyze' button triggers POST /api/funnels/query with the selected steps and date range",
+        "Loading state shown while the API processes",
+        "Uses shadcn/ui Select, Button, Card components",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 29,
+      "passes": false,
+      "notes": "This story is just the input controls and API wiring \u2014 the funnel visualization is US-009. Show raw results or a placeholder after the API call."
+    },
+    {
+      "id": "US-030",
+      "title": "Render funnel visualization with conversion rates",
+      "description": "As a growth manager, I need to see the funnel results as a visual bar chart showing progressive drop-off so I can instantly identify the weakest step.",
+      "acceptanceCriteria": [
+        "After funnel query returns, render a horizontal or vertical bar chart showing each step",
+        "Each step bar shows: event name, user count, conversion rate as percentage (relative to step 1), and drop-off count from the previous step",
+        "Bars visually decrease in size proportional to the conversion rate (funnel shape)",
+        "Between each pair of steps, show the step-to-step conversion rate (e.g., 'Step 1 \u2192 Step 2: 65%') and the drop-off count",
+        "Overall conversion rate displayed prominently (e.g., 'Overall: 12% of users completed all steps')",
+        "Color coding: healthy conversion (>50%) in green, moderate (20-50%) in yellow, poor (<20%) in red",
+        "Empty state when no users match the funnel criteria: 'No users completed Step 1 in this date range'",
+        "Uses Recharts BarChart or a custom SVG/div-based funnel visualization",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 30,
+      "passes": false,
+      "notes": "A simple vertical BarChart with decreasing bars works well. Each bar's height (or width) is proportional to the count. The step-to-step annotations are the most important part \u2014 they tell the growth manager exactly where users drop off. Prefer a clean custom layout over a generic chart if Recharts BarChart doesn't convey the funnel shape naturally."
+    },
+    {
+      "id": "US-031",
+      "title": "Enhance user profile page with identity cluster and timeline",
+      "description": "As a support lead, I need the user profile to show the complete identity cluster and a polished event timeline so I can understand a user's full journey across devices.",
+      "acceptanceCriteria": [
+        "User lookup page (from Tier 1) is enhanced with an identity cluster section at the top",
+        "Identity cluster shows: resolved user_id (primary), all linked device_ids listed as secondary identifiers with a Device lucide-react icon, first_seen and last_seen timestamps in human-readable format",
+        "Event timeline below the cluster shows all events attributed to this user in chronological order (oldest first)",
+        "Each event in the timeline shows: timestamp, event name, source identity (which device_id or user_id sent it, with a label like 'via device-abc'), all properties as key-value pairs",
+        "Events that were originally anonymous (sent with device_id only, later merged) have a subtle visual indicator (e.g., a small 'merged' badge or different background shade)",
+        "Timeline supports lazy loading or pagination: initially loads the latest 100 events, 'Load more' button or infinite scroll to fetch earlier events",
+        "GET /api/users/:id endpoint is enhanced to also return the identity cluster and event count",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 31,
+      "passes": false,
+      "notes": "This story enhances the existing US-012 from Tier 1. The 'via device-abc' annotation is important for the support lead to understand which device generated which event. The merged indicator helps verify identity resolution visually."
+    },
+    {
+      "id": "US-032",
+      "title": "Implement global visual coherence pass",
+      "description": "As a user, I need MiniPanel to look and feel like a polished product with consistent styling, proper empty states, loading indicators, and error handling across all pages.",
+      "acceptanceCriteria": [
+        "Define a consistent color palette in tailwind.config.ts: primary color (for actions and active states), chart colors (at least 6 distinct colors for multi-series charts), status colors (success green, warning yellow, error red), neutral grays for text hierarchy",
+        "Typography hierarchy is consistent: page titles use the same size/weight, section headings use the same size/weight, body text and labels are consistent across all pages",
+        "All pages have proper loading states: skeleton loaders or spinners while data is being fetched (Events, Trends, Funnels, User Profile)",
+        "All pages have proper empty states with helpful messages: Events page ('No events yet. Run npm run seed to load sample data.'), Trends page ('Select an event to see its trend'), Funnels page ('Define at least 2 steps to analyze a funnel'), User profile ('Enter a user ID or device ID to look up their activity')",
+        "All API error responses are caught and displayed as toast notifications or inline error messages (not raw error dumps or blank pages)",
+        "Chart labels are readable: axis labels have appropriate font size, dates are formatted consistently, numbers use locale formatting (commas for thousands)",
+        "No page shows a blank white screen or broken layout when data is missing or an API call fails",
+        "Sidebar active state, hover states, and transitions are smooth and consistent",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 32,
+      "passes": false,
+      "notes": "This is BR-305. It's a polish pass, not a feature. Go through each page systematically: Events, Trends, Funnels, User Profile. Fix inconsistencies. Use shadcn/ui's built-in theming where possible. Add a shared ErrorBoundary component and a shared toast/notification system."
+    },
+    {
+      "id": "US-033",
+      "title": "Add saved analyses feature",
+      "description": "As a product analyst, I want to save a trend query or funnel configuration with a name so I can reload it later without re-entering all the parameters.",
+      "acceptanceCriteria": [
+        "New database table: saved_analyses with columns: id (INTEGER PRIMARY KEY AUTOINCREMENT), name (TEXT NOT NULL), type ('trend' | 'funnel'), config (TEXT, JSON string storing all query parameters), created_at (TEXT), updated_at (TEXT)",
+        "POST /api/saved-analyses accepts { name: string, type: 'trend' | 'funnel', config: object } and stores it, returns the saved record with id",
+        "GET /api/saved-analyses returns all saved analyses sorted by updated_at descending",
+        "GET /api/saved-analyses/:id returns a single saved analysis",
+        "DELETE /api/saved-analyses/:id deletes a saved analysis",
+        "On the Trends page: a 'Save' button in the control bar that opens a dialog asking for a name, saves the current query config (event name, measure, property, breakdown, date range, granularity, chart type)",
+        "On the Funnels page: a 'Save' button that saves the current funnel config (steps, date range)",
+        "A 'Saved Analyses' dropdown or sidebar section on both pages that lists saved analyses of the matching type, clicking one loads its config into the controls and re-runs the query",
+        "Uses shadcn/ui Dialog, Input, and Button components",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 33,
+      "passes": false,
+      "notes": "Tier 4 nice-to-have (BR-400). Config is stored as a JSON blob \u2014 no need for a complex schema. Loading a saved analysis means deserializing the config and setting all the control states, then triggering a fetch."
+    },
+    {
+      "id": "US-034",
+      "title": "Add autocomplete and search to event and property selectors",
+      "description": "As a product analyst working with many event types, I need to search and filter dropdowns so I can find the right event or property quickly.",
+      "acceptanceCriteria": [
+        "All event name dropdowns across the app (Trends, Funnels, Events filter) support type-to-search filtering",
+        "All property dropdowns (measure property, breakdown property) support type-to-search filtering",
+        "Use shadcn/ui Combobox (Command + Popover pattern) or a searchable Select component",
+        "Searching is case-insensitive and matches anywhere in the name (not just prefix)",
+        "When the list is long (>10 items), the input auto-focuses for immediate typing",
+        "When the list is short (<=10 items), all items are visible without scrolling",
+        "No change to API endpoints \u2014 filtering is client-side on already-fetched data",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 34,
+      "passes": false,
+      "notes": "Tier 4 nice-to-have (BR-401). This is a UI-only improvement. Replace all Select components used for event/property selection with the Combobox pattern from shadcn/ui. Build one reusable SearchableSelect component and use it everywhere."
+    },
+    {
+      "id": "US-035",
+      "title": "Add multi-event comparison to trends page",
+      "description": "As a product analyst, I want to plot multiple event types on the same chart so I can directly compare their volumes or metrics side by side.",
+      "acceptanceCriteria": [
+        "Trends page event selector allows choosing multiple events (multi-select with checkboxes or tags)",
+        "When multiple events are selected and no breakdown is active, each event becomes a separate series on the chart with a distinct color and legend entry",
+        "The measure applies to each event independently (e.g., 'Total Count' shows count per event, 'Sum of amount' shows sum per event \u2014 only events that have the selected property are included)",
+        "Maximum 5 events can be compared simultaneously (disable adding more after 5)",
+        "Multi-event comparison and breakdown_by are mutually exclusive \u2014 selecting a breakdown clears multi-event, and vice versa, with a brief informational message",
+        "GET /api/trends is called once per selected event (parallel requests) and results are merged client-side",
+        "Legend clearly labels each series with the event name",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 35,
+      "passes": false,
+      "notes": "Tier 4 nice-to-have (BR-402). The simplest implementation: fire parallel API calls and merge the results into a multi-series chart. The mutual exclusivity with breakdown keeps complexity manageable \u2014 supporting both simultaneously would require a matrix of series."
+    },
+    {
+      "id": "US-036",
+      "title": "Write automated tests for numeric aggregations and funnels",
+      "description": "As a developer, I need tests verifying that numeric aggregations compute correctly and funnel analysis handles identity resolution across steps.",
+      "acceptanceCriteria": [
+        "Test file at server/src/__tests__/aggregations.test.ts",
+        "Test 1 - Sum aggregation: insert 'Purchase Completed' events with known amount values across 3 days, call trends API with measure=sum and property=amount, assert each day's value matches the expected sum",
+        "Test 2 - Average aggregation: same events as test 1, call with measure=avg, assert each day's value matches the expected average",
+        "Test 3 - Non-numeric property rejected: call trends API with measure=sum on a string property, assert 400 response",
+        "Test file at server/src/__tests__/funnels.test.ts",
+        "Test 4 - Basic funnel: insert events for 10 users across 3 steps (all 10 do step 1, 7 do step 2, 3 do step 3), call funnel API, assert counts are 10, 7, 3 and conversion rates are 1.0, 0.7, 0.3",
+        "Test 5 - Funnel with identity resolution: user does step 1 as anonymous device-X, then identifies as user-Y, then does step 2 as user-Y \u2014 assert the funnel counts this as 1 user who completed both steps",
+        "Test 6 - Step order enforcement: user does step 2 before step 1 (by timestamp) \u2014 assert this user is NOT counted as completing step 2 in the funnel",
+        "All tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 36,
+      "passes": false,
+      "notes": "Test 5 is the critical funnel test \u2014 it directly validates BR-303's identity resolution requirement. Test 6 ensures temporal ordering is enforced. Use in-memory SQLite per test."
+    },
+    {
+      "id": "US-037",
+      "title": "Write Playwright E2E tests for Tier 3 features",
+      "description": "As a developer, I need end-to-end tests covering the new Tier 3 features to catch integration issues.",
+      "acceptanceCriteria": [
+        "Playwright test file at e2e/tier3-features.spec.ts",
+        "Test seeds events with numeric properties via the API",
+        "Test 1 - Numeric aggregation: navigates to Trends, selects 'Purchase Completed', changes measure to 'Sum', selects 'amount' property, verifies chart renders with data",
+        "Test 2 - Breakdown: on Trends page, selects a breakdown property, verifies multiple series appear in the chart legend",
+        "Test 3 - Chart type switching: clicks bar chart icon, verifies the chart type changes (different SVG elements present), clicks area chart icon, verifies again",
+        "Test 4 - Funnel: navigates to Funnels page, adds 3 steps, clicks Analyze, verifies funnel visualization renders with conversion rates visible",
+        "Test 5 - User profile: navigates to Users page, searches for a known user ID from seeded data, verifies the identity cluster and event timeline render",
+        "All tests pass when run via 'npx playwright test'",
+        "Typecheck passes"
+      ],
+      "priority": 37,
+      "passes": false,
+      "notes": "Keep assertions practical: verify elements render and contain expected text, don't assert exact pixel positions or colors. Use data-testid attributes where needed for reliable selectors."
+    }
+  ]
+}
