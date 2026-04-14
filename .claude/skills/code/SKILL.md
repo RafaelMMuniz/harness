@@ -29,6 +29,7 @@ Your job is to build working software that meets the specifications in CLAUDE.md
 
 ## Implementation Rules
 
+- **Follow the design system for all frontend work.** Before writing any UI code — components, pages, layouts, charts, styling — read `.claude/skills/minipanel-design/SKILL.md` and load the specific reference file you need from `.claude/skills/minipanel-design/references/` (design tokens, component patterns, or page layouts). Do not invent colors, typography, spacing, or component styles. Use the design skill as the source of truth for all visual decisions.
 - **Complete implementations only.** Every function must work. Every endpoint must return real data. Every UI component must render and be interactive. Partial work wastes two agents' time.
 - **Identity resolution is sacred.** Every query that touches user identity MUST go through the resolution layer. If you find yourself writing `WHERE user_id = ?` without considering device mappings, stop and fix it. Read BR-101 in CLAUDE.md until you can recite the merge rules.
 - **Use subagents for parallelism**: Up to 200 parallel Sonnet subagents for file reads and code searches. 1 Sonnet subagent for builds and test runs (sequential filesystem access). Opus subagent for complex debugging or architectural reasoning.
