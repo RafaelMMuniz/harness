@@ -1,8 +1,247 @@
 {
   "project": "MiniPanel",
   "branchName": "ralph/minipanel",
-  "description": "MiniPanel \u2014 A self-hosted analytics platform for product teams. Covers Foundation (event collection, identity resolution, sample data, app shell), MVP (event exploration, trend analysis), MMP (numeric aggregations, dimensional breakdowns, comparative charts, funnel analysis, user profiles, visual polish), and Nice-to-haves (saved analyses, autocomplete, multi-event comparison).",
+  "description": "MiniPanel — A self-hosted analytics platform. Test-first harness: Phase 1 (priority < 0) writes Playwright E2E and API contract tests. Phase 2 (priority >= 1) implements the application — each story must pass its mapped tests. Do NOT modify files in e2e/.",
   "userStories": [
+    {
+      "id": "US-T00",
+      "title": "Write test scaffolding: Playwright config and shared helpers",
+      "description": "Create the Playwright configuration and shared API helper functions that all test files will use. Write ONLY test infrastructure files — no application code.",
+      "acceptanceCriteria": [
+        "playwright.config.ts exists at the project root with: baseURL 'http://localhost:5173', actionTimeout 5000ms, navigationTimeout 10000ms, webServer configured to run 'npm run dev' and wait for http://localhost:5173, reuseExistingServer: true",
+        "e2e/helpers.ts exists and exports these functions using Playwright's APIRequestContext against http://localhost:3001 (direct to Express, not through Vite proxy):",
+        "  createEvent(request, { event, device_id?, user_id?, timestamp?, properties? }) → POST /api/events, returns APIResponse",
+        "  createBatchEvents(request, events[]) → POST /api/events/batch, returns APIResponse",
+        "  getEvents(request, filters?: { event_name?, user_id?, device_id?, start_date?, end_date?, limit?, offset? }) → GET /api/events with query params, returns APIResponse",
+        "  getEventNames(request) → GET /api/events/names, returns APIResponse",
+        "  getStatsOverview(request) → GET /api/stats/overview, returns APIResponse",
+        "  getUserProfile(request, id) → GET /api/users/:id, returns APIResponse",
+        "All helpers return the raw Playwright APIResponse so tests can assert on both status codes and response body",
+        "TypeScript compiles with no errors: npx tsc --noEmit passes on all e2e/ files",
+        "git commit with message 'test: add Playwright config and shared API helpers'"
+      ],
+      "priority": -5,
+      "passes": false,
+      "notes": "This is test infrastructure only. The helpers define the API contract that the implementation must fulfill. Use the Playwright test() and expect() imports from @playwright/test."
+    },
+    {
+      "id": "US-T01",
+      "title": "Write API contract tests for all endpoints",
+      "description": "Write Playwright tests for all API endpoints using the request fixture (no browser). Tests self-seed their own data via the helpers in beforeAll/beforeEach hooks. Write ONLY test files — no application code.",
+      "acceptanceCriteria": [
+        "e2e/api-events.spec.ts contains tests for POST /api/events and POST /api/events/batch:",
+        "  - POST /api/events with all fields (event, device_id, user_id, timestamp, properties) returns 201 with stored event including generated id",
+        "  - POST /api/events with minimal fields (event + device_id only) returns 201",
+        "  - POST /api/events with minimal fields (event + user_id only) returns 201",
+        "  - POST /api/events missing event name returns 400 with { error } body",
+        "  - POST /api/events missing both device_id and user_id returns 400 with { error } body",
+        "  - POST /api/events with omitted timestamp returns 201 and response contains a server-set ISO 8601 timestamp",
+        "  - POST /api/events with properties object returns 201 and properties round-trip as object (not stringified JSON)",
+        "  - POST /api/events/batch with array of valid events returns 200 with { accepted: N, errors: [] }",
+        "  - POST /api/events/batch with mix of valid and invalid events returns 200, accepted count = valid count, errors array has { index, message } for each invalid event",
+        "  - POST /api/events/batch with empty array returns 400",
+        "  - POST /api/events/batch with >1000 events returns 400",
+        "e2e/api-queries.spec.ts contains tests for GET /api/events, GET /api/events/names, GET /api/stats/overview:",
+        "  - GET /api/events with no params returns { events, total, limit: 50, offset: 0 }",
+        "  - GET /api/events returns events sorted by timestamp descending (newest first)",
+        "  - GET /api/events?event_name=X returns only events matching that name",
+        "  - GET /api/events?start_date=X&end_date=Y returns only events within the date range (inclusive)",
+        "  - GET /api/events?limit=10&offset=5 returns correct page slice",
+        "  - GET /api/events with combined filters (event_name + date range) applies AND logic",
+        "  - GET /api/events/names returns alphabetically sorted array of distinct event name strings",
+        "  - GET /api/stats/overview returns { total_events, total_users, event_counts_by_name, date_range: { earliest, latest } }",
+        "  - GET /api/stats/overview total_users counts resolved identities (device mapped to user is not double-counted)",
+        "e2e/api-users.spec.ts contains tests for GET /api/users/:id:",
+        "  - GET /api/users/:id with known user_id returns { user_id, device_ids: string[], total_events, first_seen, last_seen }",
+        "  - GET /api/users/:id with device_id that has a mapping returns the resolved user profile",
+        "  - GET /api/users/:id with unknown ID returns 404 with { error } body",
+        "All test files compile: npx tsc --noEmit passes",
+        "npx playwright test --list lists all API test cases without errors",
+        "git commit with message 'test: add API contract tests for events, queries, and users'"
+      ],
+      "priority": -4,
+      "passes": false,
+      "notes": "Tests seed their own data using createEvent() and createBatchEvents() helpers in beforeAll hooks. Each test file should create fresh data with unique identifiers to avoid cross-test interference. API tests use the Playwright request fixture directly — no browser needed."
+    },
+    {
+      "id": "US-T02",
+      "title": "Write identity resolution E2E tests",
+      "description": "Write the BR-101 identity resolution verification scenarios as API-level Playwright tests. These are the most critical tests — they verify the core invariant of the system. Tests self-seed via API helpers. Write ONLY test files — no application code.",
+      "acceptanceCriteria": [
+        "e2e/identity.spec.ts contains exactly 4 test cases:",
+        "  Test 1 — Retroactive merge: create 4 events with device_id='test-device-X' and no user_id, then create 1 event with device_id='test-device-X' AND user_id='test-user-Y' (this triggers the identity mapping), then GET /api/events?user_id=test-user-Y and assert all 5 events are returned",
+        "  Test 2 — Multi-device merge: create events for device_id='test-device-A' (no user_id), create events for device_id='test-device-B' (no user_id), create event linking test-device-A to test-user-Z, create event linking test-device-B to test-user-Z, then GET /api/events?user_id=test-user-Z and assert events from both devices appear",
+        "  Test 3 — Collision rejection: create event with device_id='test-device-C' and user_id='test-user-P' (creates mapping), then create event with device_id='test-device-C' and user_id='test-user-Q', assert second request returns 409 status",
+        "  Test 4 — Unresolved device: create events for device_id='test-device-D' with no user_id (never create a mapping), then GET /api/events?device_id=test-device-D, assert only test-device-D events are returned",
+        "Test file compiles: npx tsc --noEmit passes",
+        "npx playwright test --list lists all 4 identity test cases",
+        "git commit with message 'test: add identity resolution E2E tests (BR-101 scenarios)'"
+      ],
+      "priority": -3,
+      "passes": false,
+      "notes": "Use unique test- prefixed IDs in each test to avoid collisions with other test files. Each test should be independent — seed its own data in beforeEach or at the start of the test. These tests mirror the 'How to verify' section from the business requirements."
+    },
+    {
+      "id": "US-T03",
+      "title": "Write UI E2E tests for Events page",
+      "description": "Write browser-level Playwright tests for the event explorer page. Tests self-seed data via API helpers in beforeAll (create events with varied names, timestamps, properties, and identities — enough for filter, pagination, and expand assertions). Write ONLY test files — no application code.",
+      "acceptanceCriteria": [
+        "e2e/ui-events.spec.ts contains a beforeAll hook that seeds test data via the API: at least 60 events across 3+ event types with varied timestamps and properties, using createEvent() or createBatchEvents() helpers",
+        "Test: Events page loads at '/' and renders a table containing event data",
+        "Test: Table displays columns — Timestamp, Event Name, User identity, Properties preview",
+        "Test: Filter by event name using a dropdown/select updates the table to show only matching events",
+        "Test: Filter by date range (start and end date inputs) updates the table",
+        "Test: Pagination — Next button loads the next page, Previous button returns to prior page",
+        "Test: Clicking a table row expands to show all event properties as key-value pairs",
+        "Test: Empty state message appears when filters match no events",
+        "Test: Loading indicator is visible while data is being fetched",
+        "Test file compiles: npx tsc --noEmit passes",
+        "npx playwright test --list lists all Events page test cases",
+        "git commit with message 'test: add UI E2E tests for Events explorer page'"
+      ],
+      "priority": -2,
+      "passes": false,
+      "notes": "The beforeAll data seeding uses the API helpers which POST to http://localhost:3001 directly. Use data-testid attributes in selectors where possible for resilience. For the empty state test, filter by a non-existent event name. The pagination test needs at least 51 events (default page size is 50) to verify Next works."
+    },
+    {
+      "id": "US-T04",
+      "title": "Write UI E2E tests for navigation and user lookup",
+      "description": "Write browser-level Playwright tests for the app shell navigation and user lookup page. User lookup tests self-seed via API in beforeAll: create a user with device mapping, events from both anonymous and identified phases. Write ONLY test files — no application code.",
+      "acceptanceCriteria": [
+        "e2e/ui-navigation.spec.ts contains tests:",
+        "  - Sidebar displays 'MiniPanel' title text",
+        "  - Sidebar has navigation links for Events, Users, Funnels, Settings",
+        "  - Clicking each nav link navigates to the correct route ('/', '/users', '/funnels', '/settings')",
+        "  - Active navigation item has visually distinct styling (check for an active class or different aria attribute)",
+        "  - Funnels and Settings routes display placeholder content",
+        "e2e/ui-users.spec.ts contains a beforeAll hook that seeds: 3 anonymous events for a test device, then 1 identified event linking that device to a test user (creating the identity mapping), via the API helpers",
+        "e2e/ui-users.spec.ts contains tests:",
+        "  - Users page at '/users' shows a search input and a search button",
+        "  - Searching by user_id displays the resolved identity heading ('User: <id>')",
+        "  - Search result shows a list of associated device IDs",
+        "  - Event timeline displays events in chronological order (oldest first)",
+        "  - Each timeline event shows timestamp, event name, and expanded properties",
+        "  - Searching by device_id resolves to the mapped user and shows the full profile",
+        "  - Searching for an unknown ID shows an empty state message",
+        "All test files compile: npx tsc --noEmit passes",
+        "npx playwright test --list lists all navigation and user lookup test cases",
+        "git commit with message 'test: add UI E2E tests for navigation and user lookup'"
+      ],
+      "priority": -1,
+      "passes": false,
+      "notes": "Navigation tests don't need seeded data — they test the shell layout and routing. User lookup tests need the identity resolution scenario seeded via API to verify retroactive merge in the UI. Use data-testid on search input and button for resilient selectors."
+    },
+    {
+      "id": "US-T05",
+      "title": "Write API contract tests for trends and property metadata",
+      "description": "Write Playwright API tests for the trend aggregation endpoint and property metadata endpoint. Tests self-seed data via API helpers. Write ONLY test files — no application code.",
+      "acceptanceCriteria": [
+        "e2e/api-trends.spec.ts contains tests for GET /api/trends:",
+        "  - GET /api/trends with valid event_name returns { event_name, granularity, start_date, end_date, data: [{ date, total_count, unique_users }] }",
+        "  - GET /api/trends without event_name returns 400",
+        "  - GET /api/trends with granularity='day' returns daily buckets",
+        "  - GET /api/trends with granularity='week' returns weekly buckets",
+        "  - GET /api/trends returns zero-filled buckets for days with no events (no gaps in series)",
+        "  - GET /api/trends unique_users uses resolved identities (device mapped to user not double-counted)",
+        "  - GET /api/trends with measure=sum&property=amount returns { data: [{ date, value }] } with summed values",
+        "  - GET /api/trends with measure=avg&property=amount returns averaged values",
+        "  - GET /api/trends with measure=sum but no property param returns 400",
+        "  - GET /api/trends with measure=sum on non-numeric property returns 400",
+        "  - GET /api/trends with breakdown_by=property returns { series: [{ key, data }] } with top 5 + __other__",
+        "  - GET /api/trends without breakdown_by returns flat data array (backward compatible)",
+        "e2e/api-properties.spec.ts contains tests for GET /api/events/:eventName/properties:",
+        "  - Returns array of { name, type: 'string'|'number'|'boolean', sample_values }",
+        "  - Correctly detects numeric properties (amount, quantity) vs string properties (url, button_name)",
+        "  - Returns 404 or empty array for unknown event name",
+        "All test files compile: npx tsc --noEmit passes",
+        "npx playwright test --list lists all trend and property API test cases",
+        "git commit with message 'test: add API contract tests for trends and property metadata'"
+      ],
+      "priority": -10,
+      "passes": false,
+      "notes": "Seed events with known numeric properties (amount, quantity) and string properties (url, button_name) so type detection can be verified. Use unique test- prefixed identifiers."
+    },
+    {
+      "id": "US-T06",
+      "title": "Write API contract tests for funnels and saved analyses",
+      "description": "Write Playwright API tests for the funnel analysis endpoint and saved analyses CRUD. Tests self-seed data via API helpers. Write ONLY test files — no application code.",
+      "acceptanceCriteria": [
+        "e2e/api-funnels.spec.ts contains tests for POST /api/funnels/query:",
+        "  - Valid funnel with 3 steps returns { steps: [{ event_name, count, conversion_rate, drop_off }], overall_conversion_rate }",
+        "  - steps[0].conversion_rate is always 1.0",
+        "  - Conversion counts decrease or stay equal across steps (count[N] <= count[N-1])",
+        "  - Step order enforced: user who does step 2 before step 1 (by timestamp) is NOT counted as completing step 2",
+        "  - Identity resolution: user does step 1 as anonymous device, identifies, does step 2 — counts as one user progressing",
+        "  - Fewer than 2 steps returns 400",
+        "  - More than 5 steps returns 400",
+        "e2e/api-saved.spec.ts contains tests for saved analyses CRUD:",
+        "  - POST /api/saved-analyses with { name, type: 'trend', config } returns 201 with saved analysis including id",
+        "  - GET /api/saved-analyses returns array sorted by updated_at descending",
+        "  - GET /api/saved-analyses/:id returns the specific saved analysis",
+        "  - DELETE /api/saved-analyses/:id returns 200 and subsequent GET returns 404",
+        "All test files compile: npx tsc --noEmit passes",
+        "npx playwright test --list lists all funnel and saved analyses test cases",
+        "git commit with message 'test: add API contract tests for funnels and saved analyses'"
+      ],
+      "priority": -9,
+      "passes": false,
+      "notes": "For funnel tests, seed events for multiple users with known step sequences and timestamps. Include an identity resolution scenario where a user starts anonymous and identifies between steps."
+    },
+    {
+      "id": "US-T07",
+      "title": "Write UI E2E tests for Trends page",
+      "description": "Write browser-level Playwright tests for the Trends page including controls, chart rendering, measure/breakdown selectors, and chart type switching. Tests self-seed data via API helpers in beforeAll. Write ONLY test files — no application code.",
+      "acceptanceCriteria": [
+        "e2e/ui-trends.spec.ts contains a beforeAll hook that seeds events via API: at least 2 event types with numeric properties, spread over multiple days",
+        "Test: Trends page is accessible from sidebar navigation",
+        "Test: Default state shows 'Select an event to see its trend' prompt",
+        "Test: Selecting an event from dropdown renders a chart (SVG or canvas element visible)",
+        "Test: Changing granularity to 'Week' updates the chart (fewer data points)",
+        "Test: Changing date range preset updates the chart",
+        "Test: Chart has a tooltip visible on hover with date and values",
+        "Test: Chart has a legend identifying the series",
+        "Test: Selecting measure 'Sum' shows a property dropdown",
+        "Test: Selecting measure 'Total Count' hides the property dropdown",
+        "Test: Selecting a breakdown property shows multiple series in the chart legend",
+        "Test: Selecting 'None' for breakdown returns to single-series view",
+        "Test: Clicking bar chart icon switches chart type (different chart elements rendered)",
+        "Test: Clicking area chart icon switches chart type",
+        "Test: Multi-event selection shows multiple series (one per event)",
+        "Test file compiles: npx tsc --noEmit passes",
+        "npx playwright test --list lists all Trends page test cases",
+        "git commit with message 'test: add UI E2E tests for Trends page'"
+      ],
+      "priority": -8,
+      "passes": false,
+      "notes": "Use data-testid attributes for chart type toggles, measure/breakdown selectors. The chart rendering tests should check for the presence of SVG elements, not exact pixel values."
+    },
+    {
+      "id": "US-T08",
+      "title": "Write UI E2E tests for Funnels page and enhanced user profile",
+      "description": "Write browser-level Playwright tests for the funnel analysis page and the enhanced user profile. Tests self-seed data via API helpers in beforeAll. Write ONLY test files — no application code.",
+      "acceptanceCriteria": [
+        "e2e/ui-funnels.spec.ts contains a beforeAll hook that seeds events for a multi-step funnel scenario via API",
+        "Test: Funnels page accessible from sidebar, shows 'Funnel Analysis' heading",
+        "Test: Step builder shows 2 initial step dropdowns with event name options",
+        "Test: Add Step button adds a new step (up to 5), disabled at 5 steps",
+        "Test: Remove Step button removes a step (minimum 2), disabled at 2 steps",
+        "Test: Clicking 'Analyze' with valid steps shows funnel visualization with conversion rates",
+        "Test: Funnel visualization shows decreasing bar sizes and conversion percentages",
+        "Test: Overall conversion rate is displayed",
+        "Test: Empty state when no users match the funnel",
+        "e2e/ui-users-enhanced.spec.ts contains a beforeAll hook that seeds a user with multiple devices and anonymous + identified events",
+        "Test: User profile shows identity cluster with resolved user_id and linked device_ids",
+        "Test: Event timeline shows events in chronological order with source identity labels",
+        "Test: Anonymous events (pre-merge) have a visual indicator",
+        "Test: Timeline supports pagination or 'Load more'",
+        "All test files compile: npx tsc --noEmit passes",
+        "npx playwright test --list lists all funnel and user profile test cases",
+        "git commit with message 'test: add UI E2E tests for Funnels page and enhanced user profile'"
+      ],
+      "priority": -7,
+      "passes": false,
+      "notes": "Funnel tests need users who progressed through multiple steps. Seed at least 10 users with step 1, 7 with step 2, 3 with step 3 for realistic conversion rates. User profile tests need a multi-device identity scenario."
+    },
     {
       "id": "US-001",
       "title": "Initialize project with monorepo structure",
@@ -14,14 +253,15 @@
         "Shadcn UI initialized in client with at least one component (Button) available",
         "lucide-react installed and importable in client",
         "Zod installed and importable in server",
-        "Playwright installed with a placeholder test file in 'e2e/' that passes",
+        "Playwright installed with existing test files in 'e2e/' intact — do NOT modify or delete any files in e2e/",
         "A single 'npm install' at the root installs all dependencies (workspaces or similar)",
         "README.md documents: 'npm install && npm run dev' as the single start command",
-        "Typecheck passes for both client and server"
+        "Typecheck passes for both client and server",
+        "Playwright config is valid: npx playwright test --list succeeds"
       ],
       "priority": 1,
       "passes": false,
-      "notes": "This is the skeleton. Keep it minimal \u2014 no business logic yet. Use npm workspaces or a simple concurrently setup."
+      "notes": "This is the skeleton. Keep it minimal — no business logic yet. Use npm workspaces or a simple concurrently setup."
     },
     {
       "id": "US-002",
@@ -53,11 +293,12 @@
         "If the event contains both device_id and user_id, an identity mapping is created or confirmed (INSERT OR IGNORE into identity_mappings)",
         "If the event contains both device_id and user_id, and that device_id is already mapped to a DIFFERENT user_id in identity_mappings, reject the event with HTTP 409 and body: { error: 'device_id is already mapped to a different user' }. Do NOT insert the event.",
         "Properties object is serialized to a JSON string before storage",
-        "Typecheck passes"
+        "Typecheck passes",
+        "Playwright single-event POST tests pass: npx playwright test api-events.spec.ts (the POST /api/events tests)"
       ],
       "priority": 3,
       "passes": false,
-      "notes": "Identity mapping creation here is a side effect of event ingestion \u2014 it's the core of the simplified merge model. INSERT OR IGNORE handles the case where the mapping already exists. Check for identity conflict BEFORE inserting the event."
+      "notes": "Identity mapping creation here is a side effect of event ingestion — it's the core of the simplified merge model. INSERT OR IGNORE handles the case where the mapping already exists. Check for identity conflict BEFORE inserting the event."
     },
     {
       "id": "US-004",
@@ -69,10 +310,11 @@
         "Each event in the array is validated individually with the same rules as POST /api/events",
         "All valid events in the batch are inserted in a single SQLite transaction for performance",
         "Identity mappings are created for any events with both device_id and user_id",
-        "If an event in the batch would create a device_id mapping that conflicts with an existing mapping (device already mapped to a different user), that individual event is skipped and reported in the errors array \u2014 it does NOT abort the entire batch",
+        "If an event in the batch would create a device_id mapping that conflicts with an existing mapping (device already mapped to a different user), that individual event is skipped and reported in the errors array — it does NOT abort the entire batch",
         "Returns 200 with a JSON body: { accepted: number, errors: Array<{ index: number, message: string }> }",
         "If any individual event fails validation or has an identity conflict, it is skipped (not inserted) and reported in the errors array, but the rest of the batch succeeds",
-        "Typecheck passes"
+        "Typecheck passes",
+        "All Playwright event API tests pass: npx playwright test api-events.spec.ts (single + batch tests)"
       ],
       "priority": 4,
       "passes": false,
@@ -85,11 +327,12 @@
       "acceptanceCriteria": [
         "A resolveIdentity(deviceOrUserId: string) function exists that: given a user_id, returns that user_id; given a device_id, looks up the identity_mappings table and returns the mapped user_id if one exists, otherwise returns the device_id as-is",
         "A getEventsForUser(userId: string) function exists that returns all events attributed to a resolved user: events where user_id matches, PLUS events where device_id is mapped to that user_id via identity_mappings",
-        "GET /api/events?user_id=<id> returns all resolved events for that user, sorted by timestamp ascending (oldest first \u2014 this is the user timeline view, distinct from the paginated list in US-007 which sorts descending/newest first)",
+        "GET /api/events?user_id=<id> returns all resolved events for that user, sorted by timestamp ascending (oldest first — this is the user timeline view, distinct from the paginated list in US-007 which sorts descending/newest first)",
         "GET /api/events?device_id=<id> resolves the device to a user (if mapping exists) and returns all events for that resolved user, sorted by timestamp ascending",
         "Response includes an array of event objects with parsed properties (JSON object, not string)",
         "The merge is retroactive: events recorded before the identity mapping was created are included",
-        "Typecheck passes"
+        "Typecheck passes",
+        "All identity resolution tests pass: npx playwright test identity.spec.ts"
       ],
       "priority": 5,
       "passes": false,
@@ -124,7 +367,8 @@
         "Response body: { events: Event[], total: number, limit: number, offset: number }",
         "Events in response have properties parsed from JSON string to object",
         "Identity resolution is applied: if filtering by user_id, events from all mapped devices are included",
-        "Typecheck passes"
+        "Typecheck passes",
+        "GET /api/events filter and pagination tests pass in api-queries.spec.ts (the GET /api/events/names and GET /api/stats/overview tests may still fail — those are addressed in US-011)"
       ],
       "priority": 7,
       "passes": false,
@@ -145,7 +389,8 @@
         "Events include string properties (url, referrer, button_name, plan_type) and numeric properties (amount, duration_seconds, quantity) appropriate to each event type",
         "Seeder calls the batch API endpoint (POST /api/events/batch) or directly inserts into the database",
         "Running the seeder twice does not duplicate data (clears existing data first or is idempotent)",
-        "Typecheck passes"
+        "Typecheck passes",
+        "After seeding, existing query tests still pass: npx playwright test api-queries.spec.ts"
       ],
       "priority": 8,
       "passes": false,
@@ -164,11 +409,12 @@
         "Application title 'MiniPanel' appears at the top of the sidebar",
         "Layout uses Tailwind CSS and looks clean on screens 1024px and wider",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Verify in browser using dev-browser skill",
+        "Navigation tests pass: npx playwright test ui-navigation.spec.ts"
       ],
       "priority": 9,
       "passes": false,
-      "notes": "Use shadcn/ui components where appropriate (e.g., Button for nav items, or a simple custom sidebar). Keep it minimal \u2014 this is the shell, not the feature pages. Funnels, Users, and Settings are placeholders for future tiers."
+      "notes": "Use shadcn/ui components where appropriate (e.g., Button for nav items, or a simple custom sidebar). Keep it minimal — this is the shell, not the feature pages. Funnels, Users, and Settings are placeholders for future tiers."
     },
     {
       "id": "US-010",
@@ -186,7 +432,8 @@
         "Empty state shown when no events match the filters",
         "Uses shadcn/ui Table component and lucide-react icons",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Verify in browser using dev-browser skill",
+        "Events page UI tests pass: npx playwright test ui-events.spec.ts"
       ],
       "priority": 10,
       "passes": false,
@@ -201,11 +448,12 @@
         "GET /api/stats/overview returns a JSON object with: total_events (number), total_users (number of distinct resolved user identities), event_counts_by_name (object mapping event name to count), date_range (object with earliest and latest event timestamps)",
         "Total users count uses resolved identities: anonymous devices mapped to a user are not counted separately",
         "Responses are fast (< 500ms) on the sample dataset of 10k events",
-        "Typecheck passes"
+        "Typecheck passes",
+        "Query API tests pass (names + stats): npx playwright test api-queries.spec.ts"
       ],
       "priority": 11,
       "passes": false,
-      "notes": "These endpoints support the event explorer filters and could support a future dashboard. Keep the SQL simple \u2014 COUNT, DISTINCT, GROUP BY."
+      "notes": "These endpoints support the event explorer filters and could support a future dashboard. Keep the SQL simple — COUNT, DISTINCT, GROUP BY."
     },
     {
       "id": "US-012",
@@ -221,28 +469,12 @@
         "Empty state when no user/device is found with that ID",
         "Uses shadcn/ui components (Input, Card, Table)",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Verify in browser using dev-browser skill",
+        "User lookup tests pass: npx playwright test ui-users.spec.ts and npx playwright test api-users.spec.ts"
       ],
       "priority": 12,
       "passes": false,
-      "notes": "This serves the support lead persona. The user profile endpoint is new \u2014 it aggregates identity_mappings and events for a single resolved user."
-    },
-    {
-      "id": "US-013",
-      "title": "Write Playwright end-to-end test for full event lifecycle",
-      "description": "As a developer, I need an end-to-end test that verifies the complete flow from event ingestion through identity resolution to the UI so I can confidently ship changes.",
-      "acceptanceCriteria": [
-        "Playwright test file at e2e/event-lifecycle.spec.ts",
-        "Test seeds a small set of events via the API (anonymous events, then an identify event linking device to user)",
-        "Test navigates to the Events page and verifies the events appear in the table",
-        "Test uses the user lookup to search for the identified user and verifies all events (including pre-identification anonymous events) appear in the timeline",
-        "Test passes when run via 'npx playwright test'",
-        "Playwright config starts the dev server automatically before tests",
-        "Typecheck passes"
-      ],
-      "priority": 13,
-      "passes": false,
-      "notes": "This is the integration-level verification. Keep it focused on the happy path \u2014 the unit tests in US-006 cover edge cases."
+      "notes": "This serves the support lead persona. The user profile endpoint is new — it aggregates identity_mappings and events for a single resolved user."
     },
     {
       "id": "US-014",
@@ -255,11 +487,12 @@
         "API endpoints return consistent error response format: { error: string, details?: string }",
         "Server logs incoming requests with method, path, and status code (simple middleware)",
         "No unhandled promise rejections or uncaught exceptions crash the server",
-        "Typecheck passes"
+        "Typecheck passes",
+        "ALL Playwright tests pass: npx playwright test"
       ],
       "priority": 14,
       "passes": false,
-      "notes": "This is the cleanup story. Don't add new features \u2014 just make everything that exists work smoothly. The README is the 'single documented command' requirement from BR-103."
+      "notes": "This is the cleanup story. Don't add new features — just make everything that exists work smoothly. The README is the 'single documented command' requirement from BR-103."
     },
     {
       "id": "US-015",
@@ -274,9 +507,10 @@
         "Response body: { event_name: string, granularity: string, start_date: string, end_date: string, data: Array<{ date: string, total_count: number, unique_users: number }> }",
         "Each entry in data represents one time bucket (one day or one week starting Monday)",
         "total_count is the number of events in that bucket",
-        "unique_users is the count of distinct resolved identities in that bucket \u2014 anonymous devices that are mapped to a user_id via identity_mappings are counted under that user_id, not separately",
+        "unique_users is the count of distinct resolved identities in that bucket — anonymous devices that are mapped to a user_id via identity_mappings are counted under that user_id, not separately",
         "Time buckets with zero events are included in the response with total_count: 0 and unique_users: 0 (no gaps in the series)",
-        "Typecheck passes"
+        "Typecheck passes",
+        "Trend API basic tests pass: npx playwright test api-trends.spec.ts (daily/weekly bucketing, zero-fill, identity resolution tests)"
       ],
       "priority": 15,
       "passes": false,
@@ -297,7 +531,7 @@
       ],
       "priority": 16,
       "passes": false,
-      "notes": "Keep this pure \u2014 no React dependencies. This is a utility module that the Trends page component will import."
+      "notes": "Keep this pure — no React dependencies. This is a utility module that the Trends page component will import."
     },
     {
       "id": "US-017",
@@ -314,11 +548,12 @@
         "Loading spinner or skeleton shown while data is being fetched",
         "Uses shadcn/ui Select, Button, and Input components",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Verify in browser using dev-browser skill",
+        "Trends page basic UI tests pass: npx playwright test ui-trends.spec.ts (navigation, default state, event selection, chart rendering)"
       ],
       "priority": 17,
       "passes": false,
-      "notes": "Don't render the chart yet \u2014 that's US-004. This story focuses on the layout, controls, and API wiring. Show raw data or a placeholder where the chart will go."
+      "notes": "Don't render the chart yet — that's US-004. This story focuses on the layout, controls, and API wiring. Show raw data or a placeholder where the chart will go."
     },
     {
       "id": "US-018",
@@ -336,18 +571,19 @@
         "When the API returns all zeroes, chart still renders with the zero line visible and a subtle message: 'No events found in this range'",
         "Chart is responsive and fills the available width",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Verify in browser using dev-browser skill",
+        "Trends page chart tests pass: npx playwright test ui-trends.spec.ts (chart rendering, tooltip, legend tests)"
       ],
       "priority": 18,
       "passes": false,
-      "notes": "Use Recharts LineChart \u2014 it's already available in the Claude artifact environment and is a well-known React charting library. The two-line chart is the key verification for identity resolution in aggregations: unique_users should be lower than total_count when users trigger the same event multiple times."
+      "notes": "Use Recharts LineChart — it's already available in the Claude artifact environment and is a well-known React charting library. The two-line chart is the key verification for identity resolution in aggregations: unique_users should be lower than total_count when users trigger the same event multiple times."
     },
     {
       "id": "US-019",
       "title": "Verify event explorer covers BR-200 requirements",
       "description": "As a developer, I need to confirm and fix any gaps between the existing event explorer (from Tier 1) and the BR-200 specification.",
       "acceptanceCriteria": [
-        "Events page shows events in reverse chronological order (newest first) \u2014 verify this is the default sort and fix if not",
+        "Events page shows events in reverse chronological order (newest first) — verify this is the default sort and fix if not",
         "Each event row displays: timestamp (human-readable format), event name, resolved identity (show user_id if resolved, device_id if anonymous, with a visual indicator for anonymous), all properties (visible on expand or in detail panel)",
         "Filtering by event name works: selecting an event name from the dropdown shows only matching events",
         "Pagination works: 'Previous' and 'Next' controls navigate through large datasets without loading all events at once",
@@ -357,7 +593,7 @@
       ],
       "priority": 19,
       "passes": false,
-      "notes": "This is a gap-check story. Most of BR-200 was implemented in Tier 1 (US-007 and US-010). This story verifies everything works end-to-end and fixes any issues. The key addition is making sure the resolved identity column is clear \u2014 show a label like 'user: abc' vs 'device: xyz (anonymous)' so the developer can verify identity resolution at a glance."
+      "notes": "This is a gap-check story. Most of BR-200 was implemented in Tier 1 (US-007 and US-010). This story verifies everything works end-to-end and fixes any issues. The key addition is making sure the resolved identity column is clear — show a label like 'user: abc' vs 'device: xyz (anonymous)' so the developer can verify identity resolution at a glance."
     },
     {
       "id": "US-020",
@@ -375,25 +611,7 @@
       ],
       "priority": 20,
       "passes": false,
-      "notes": "Test 3 is the critical one \u2014 it validates that identity resolution works in aggregations (BR-201 verification point 2). Use in-memory SQLite per test."
-    },
-    {
-      "id": "US-021",
-      "title": "Write Playwright E2E test for trend analysis flow",
-      "description": "As a developer, I need an end-to-end test that verifies the full trend analysis workflow from the UI.",
-      "acceptanceCriteria": [
-        "Playwright test file at e2e/trends.spec.ts",
-        "Test seeds events via the API (at least 2 event types, spread over multiple days)",
-        "Test navigates to the Trends page",
-        "Test selects an event from the dropdown and verifies the chart renders (chart SVG or canvas element is visible)",
-        "Test changes granularity to 'Week' and verifies the chart updates (fewer data points than daily)",
-        "Test changes date range to 'Last 7 days' and verifies the chart updates",
-        "Test passes when run via 'npx playwright test'",
-        "Typecheck passes"
-      ],
-      "priority": 21,
-      "passes": false,
-      "notes": "Keep assertions practical \u2014 verify the chart element renders and updates on interaction, don't try to read exact pixel values from the chart. Check for the presence of Recharts SVG elements or specific tooltip text on hover."
+      "notes": "Test 3 is the critical one — it validates that identity resolution works in aggregations (BR-201 verification point 2). Use in-memory SQLite per test."
     },
     {
       "id": "US-022",
@@ -402,11 +620,12 @@
       "acceptanceCriteria": [
         "GET /api/events/:eventName/properties returns an array of property descriptors for that event type",
         "Each descriptor has: { name: string, type: 'string' | 'number' | 'boolean', sample_values: string[] }",
-        "Type detection logic: scan a sample of recent events (up to 500) for the given event name, for each property key check if all non-null values parse as numbers \u2014 if yes, type is 'number'; if all are 'true'/'false', type is 'boolean'; otherwise 'string'",
+        "Type detection logic: scan a sample of recent events (up to 500) for the given event name, for each property key check if all non-null values parse as numbers — if yes, type is 'number'; if all are 'true'/'false', type is 'boolean'; otherwise 'string'",
         "sample_values contains up to 10 distinct values for that property (useful for breakdown selectors)",
         "Properties with no values across all sampled events are excluded",
         "Response is fast (< 500ms) on the sample dataset",
-        "Typecheck passes"
+        "Typecheck passes",
+        "Property metadata API tests pass: npx playwright test api-properties.spec.ts"
       ],
       "priority": 22,
       "passes": false,
@@ -428,7 +647,8 @@
         "For 'max': maximum property value in the bucket",
         "Buckets with no events return value: 0 for sum, and value: null for avg/min/max (to distinguish 'no data' from 'zero')",
         "Existing total_count and unique_users measures continue to work as before (backward compatible)",
-        "Typecheck passes"
+        "Typecheck passes",
+        "Trend API numeric measure tests pass: npx playwright test api-trends.spec.ts (sum, avg, min, max tests)"
       ],
       "priority": 23,
       "passes": false,
@@ -446,7 +666,8 @@
         "Breakdown works with all measures: total_count, unique_users, sum, avg, min, max",
         "When breakdown_by is not provided, the response uses the existing flat data array format (backward compatible)",
         "Zero-fill applies to each series independently (all series have entries for all time buckets)",
-        "Typecheck passes"
+        "Typecheck passes",
+        "Trend API breakdown tests pass: npx playwright test api-trends.spec.ts (breakdown_by tests)"
       ],
       "priority": 24,
       "passes": false,
@@ -468,7 +689,8 @@
         "steps[N].drop_off is steps[N-1].count - steps[N].count",
         "overall_conversion_rate is steps[last].count / steps[0].count",
         "A user who performs step 1 anonymously and step 2 after identity merge is counted as ONE user progressing (not a dropout)",
-        "Typecheck passes"
+        "Typecheck passes",
+        "Funnel API tests pass: npx playwright test api-funnels.spec.ts"
       ],
       "priority": 25,
       "passes": false,
@@ -487,7 +709,8 @@
         "If no numeric properties exist for the selected event, Sum/Avg/Min/Max options are disabled in the dropdown with a tooltip: 'No numeric properties available'",
         "Default measure remains 'Total Count'",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Verify in browser using dev-browser skill",
+        "Trends page measure selector tests pass: npx playwright test ui-trends.spec.ts (measure/property selector tests)"
       ],
       "priority": 26,
       "passes": false,
@@ -507,7 +730,8 @@
         "Tooltip shows values for all visible series at the hovered date",
         "Changing the breakdown re-fetches and re-renders the chart",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Verify in browser using dev-browser skill",
+        "Trends page breakdown tests pass: npx playwright test ui-trends.spec.ts (breakdown selector, multi-series tests)"
       ],
       "priority": 27,
       "passes": false,
@@ -522,12 +746,13 @@
         "Line chart: renders as Recharts LineChart (existing default behavior)",
         "Bar chart: renders as Recharts BarChart with the same data, colors, and tooltip",
         "Area chart: renders as Recharts AreaChart with semi-transparent fills under each line",
-        "Switching chart type does NOT re-fetch data \u2014 it only changes the rendering",
+        "Switching chart type does NOT re-fetch data — it only changes the rendering",
         "All three chart types work with both single-series and breakdown (multi-series) views",
         "Default chart type is 'line'",
         "Selected chart type is visually highlighted in the toggle",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Verify in browser using dev-browser skill",
+        "Chart type switching tests pass: npx playwright test ui-trends.spec.ts (bar, area, line chart toggle tests)"
       ],
       "priority": 28,
       "passes": false,
@@ -548,11 +773,12 @@
         "Loading state shown while the API processes",
         "Uses shadcn/ui Select, Button, Card components",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Verify in browser using dev-browser skill",
+        "Funnel page step builder tests pass: npx playwright test ui-funnels.spec.ts (step builder tests)"
       ],
       "priority": 29,
       "passes": false,
-      "notes": "This story is just the input controls and API wiring \u2014 the funnel visualization is US-009. Show raw results or a placeholder after the API call."
+      "notes": "This story is just the input controls and API wiring — the funnel visualization is US-009. Show raw results or a placeholder after the API call."
     },
     {
       "id": "US-030",
@@ -562,17 +788,18 @@
         "After funnel query returns, render a horizontal or vertical bar chart showing each step",
         "Each step bar shows: event name, user count, conversion rate as percentage (relative to step 1), and drop-off count from the previous step",
         "Bars visually decrease in size proportional to the conversion rate (funnel shape)",
-        "Between each pair of steps, show the step-to-step conversion rate (e.g., 'Step 1 \u2192 Step 2: 65%') and the drop-off count",
+        "Between each pair of steps, show the step-to-step conversion rate (e.g., 'Step 1 → Step 2: 65%') and the drop-off count",
         "Overall conversion rate displayed prominently (e.g., 'Overall: 12% of users completed all steps')",
         "Color coding: healthy conversion (>50%) in green, moderate (20-50%) in yellow, poor (<20%) in red",
         "Empty state when no users match the funnel criteria: 'No users completed Step 1 in this date range'",
         "Uses Recharts BarChart or a custom SVG/div-based funnel visualization",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Verify in browser using dev-browser skill",
+        "Funnel visualization tests pass: npx playwright test ui-funnels.spec.ts (visualization, conversion rate tests)"
       ],
       "priority": 30,
       "passes": false,
-      "notes": "A simple vertical BarChart with decreasing bars works well. Each bar's height (or width) is proportional to the count. The step-to-step annotations are the most important part \u2014 they tell the growth manager exactly where users drop off. Prefer a clean custom layout over a generic chart if Recharts BarChart doesn't convey the funnel shape naturally."
+      "notes": "A simple vertical BarChart with decreasing bars works well. Each bar's height (or width) is proportional to the count. The step-to-step annotations are the most important part — they tell the growth manager exactly where users drop off. Prefer a clean custom layout over a generic chart if Recharts BarChart doesn't convey the funnel shape naturally."
     },
     {
       "id": "US-031",
@@ -587,7 +814,8 @@
         "Timeline supports lazy loading or pagination: initially loads the latest 100 events, 'Load more' button or infinite scroll to fetch earlier events",
         "GET /api/users/:id endpoint is enhanced to also return the identity cluster and event count",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Verify in browser using dev-browser skill",
+        "Enhanced user profile tests pass: npx playwright test ui-users-enhanced.spec.ts"
       ],
       "priority": 31,
       "passes": false,
@@ -628,11 +856,12 @@
         "A 'Saved Analyses' dropdown or sidebar section on both pages that lists saved analyses of the matching type, clicking one loads its config into the controls and re-runs the query",
         "Uses shadcn/ui Dialog, Input, and Button components",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Verify in browser using dev-browser skill",
+        "Saved analyses API tests pass: npx playwright test api-saved.spec.ts"
       ],
       "priority": 33,
       "passes": false,
-      "notes": "Tier 4 nice-to-have (BR-400). Config is stored as a JSON blob \u2014 no need for a complex schema. Loading a saved analysis means deserializing the config and setting all the control states, then triggering a fetch."
+      "notes": "Tier 4 nice-to-have (BR-400). Config is stored as a JSON blob — no need for a complex schema. Loading a saved analysis means deserializing the config and setting all the control states, then triggering a fetch."
     },
     {
       "id": "US-034",
@@ -645,7 +874,7 @@
         "Searching is case-insensitive and matches anywhere in the name (not just prefix)",
         "When the list is long (>10 items), the input auto-focuses for immediate typing",
         "When the list is short (<=10 items), all items are visible without scrolling",
-        "No change to API endpoints \u2014 filtering is client-side on already-fetched data",
+        "No change to API endpoints — filtering is client-side on already-fetched data",
         "Typecheck passes",
         "Verify in browser using dev-browser skill"
       ],
@@ -660,17 +889,18 @@
       "acceptanceCriteria": [
         "Trends page event selector allows choosing multiple events (multi-select with checkboxes or tags)",
         "When multiple events are selected and no breakdown is active, each event becomes a separate series on the chart with a distinct color and legend entry",
-        "The measure applies to each event independently (e.g., 'Total Count' shows count per event, 'Sum of amount' shows sum per event \u2014 only events that have the selected property are included)",
+        "The measure applies to each event independently (e.g., 'Total Count' shows count per event, 'Sum of amount' shows sum per event — only events that have the selected property are included)",
         "Maximum 5 events can be compared simultaneously (disable adding more after 5)",
-        "Multi-event comparison and breakdown_by are mutually exclusive \u2014 selecting a breakdown clears multi-event, and vice versa, with a brief informational message",
+        "Multi-event comparison and breakdown_by are mutually exclusive — selecting a breakdown clears multi-event, and vice versa, with a brief informational message",
         "GET /api/trends is called once per selected event (parallel requests) and results are merged client-side",
         "Legend clearly labels each series with the event name",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Verify in browser using dev-browser skill",
+        "Multi-event comparison tests pass: npx playwright test ui-trends.spec.ts (multi-event tests)"
       ],
       "priority": 35,
       "passes": false,
-      "notes": "Tier 4 nice-to-have (BR-402). The simplest implementation: fire parallel API calls and merge the results into a multi-series chart. The mutual exclusivity with breakdown keeps complexity manageable \u2014 supporting both simultaneously would require a matrix of series."
+      "notes": "Tier 4 nice-to-have (BR-402). The simplest implementation: fire parallel API calls and merge the results into a multi-series chart. The mutual exclusivity with breakdown keeps complexity manageable — supporting both simultaneously would require a matrix of series."
     },
     {
       "id": "US-036",
@@ -683,33 +913,14 @@
         "Test 3 - Non-numeric property rejected: call trends API with measure=sum on a string property, assert 400 response",
         "Test file at server/src/__tests__/funnels.test.ts",
         "Test 4 - Basic funnel: insert events for 10 users across 3 steps (all 10 do step 1, 7 do step 2, 3 do step 3), call funnel API, assert counts are 10, 7, 3 and conversion rates are 1.0, 0.7, 0.3",
-        "Test 5 - Funnel with identity resolution: user does step 1 as anonymous device-X, then identifies as user-Y, then does step 2 as user-Y \u2014 assert the funnel counts this as 1 user who completed both steps",
-        "Test 6 - Step order enforcement: user does step 2 before step 1 (by timestamp) \u2014 assert this user is NOT counted as completing step 2 in the funnel",
+        "Test 5 - Funnel with identity resolution: user does step 1 as anonymous device-X, then identifies as user-Y, then does step 2 as user-Y — assert the funnel counts this as 1 user who completed both steps",
+        "Test 6 - Step order enforcement: user does step 2 before step 1 (by timestamp) — assert this user is NOT counted as completing step 2 in the funnel",
         "All tests pass",
         "Typecheck passes"
       ],
       "priority": 36,
       "passes": false,
-      "notes": "Test 5 is the critical funnel test \u2014 it directly validates BR-303's identity resolution requirement. Test 6 ensures temporal ordering is enforced. Use in-memory SQLite per test."
-    },
-    {
-      "id": "US-037",
-      "title": "Write Playwright E2E tests for Tier 3 features",
-      "description": "As a developer, I need end-to-end tests covering the new Tier 3 features to catch integration issues.",
-      "acceptanceCriteria": [
-        "Playwright test file at e2e/tier3-features.spec.ts",
-        "Test seeds events with numeric properties via the API",
-        "Test 1 - Numeric aggregation: navigates to Trends, selects 'Purchase Completed', changes measure to 'Sum', selects 'amount' property, verifies chart renders with data",
-        "Test 2 - Breakdown: on Trends page, selects a breakdown property, verifies multiple series appear in the chart legend",
-        "Test 3 - Chart type switching: clicks bar chart icon, verifies the chart type changes (different SVG elements present), clicks area chart icon, verifies again",
-        "Test 4 - Funnel: navigates to Funnels page, adds 3 steps, clicks Analyze, verifies funnel visualization renders with conversion rates visible",
-        "Test 5 - User profile: navigates to Users page, searches for a known user ID from seeded data, verifies the identity cluster and event timeline render",
-        "All tests pass when run via 'npx playwright test'",
-        "Typecheck passes"
-      ],
-      "priority": 37,
-      "passes": false,
-      "notes": "Keep assertions practical: verify elements render and contain expected text, don't assert exact pixel positions or colors. Use data-testid attributes where needed for reliable selectors."
+      "notes": "Test 5 is the critical funnel test — it directly validates BR-303's identity resolution requirement. Test 6 ensures temporal ordering is enforced. Use in-memory SQLite per test."
     }
   ]
 }
