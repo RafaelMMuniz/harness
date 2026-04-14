@@ -94,6 +94,7 @@
         "Test: Pagination — Next button loads the next page, Previous button returns to prior page",
         "Test: Clicking a table row expands to show all event properties as key-value pairs",
         "Test: Empty state message appears when filters match no events",
+        "Test: Loading indicator is visible while data is being fetched",
         "Test file compiles: npx tsc --noEmit passes",
         "npx playwright test --list lists all Events page test cases",
         "git commit with message 'test: add UI E2E tests for Events explorer page'"
