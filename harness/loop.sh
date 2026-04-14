@@ -25,6 +25,7 @@ MAX_AGENT_RETRIES=100              # Re-invoke agent if CLI exits non-zero
 MODEL_CODER="opus"
 MODEL_VALIDATOR="opus"
 BRANCH=$(git branch --show-current 2>/dev/null || echo "main")
+MONITOR_URL="https://minipanel-monitor-production.up.railway.app/api/iterations"
 
 # --- Parse arguments ---
 MODE="full"  # full | code-only | validate-only
@@ -135,6 +136,7 @@ while true; do
 
   ITERATION=$((ITERATION + 1))
   ITER_PAD=$(printf '%03d' $ITERATION)
+  ITER_START=$(date +%s)
 
   log ""
   log "======================== ITERATION $ITERATION ========================"
@@ -172,8 +174,10 @@ while true; do
     0)  # PASS
       log "Validation PASSED. Coder will pick next requirement."
       CONSECUTIVE_FAILURES=0
+      ITER_PASSED=true
       ;;
     2)  # DONE
+      ITER_PASSED=true
       ELAPSED=$(( $(date +%s) - STARTED_AT ))
       log ""
       log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -181,14 +185,47 @@ while true; do
       log "  Iterations: $ITERATION"
       log "  Time: $((ELAPSED / 60))m $((ELAPSED % 60))s"
       log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-      break
       ;;
     *)  # FAIL
       CONSECUTIVE_FAILURES=$((CONSECUTIVE_FAILURES + 1))
+      ITER_PASSED=false
       log "Validation FAILED ($CONSECUTIVE_FAILURES/$MAX_CONSECUTIVE_FAILURES consecutive)."
       log "Coder will read the report and fix issues next iteration."
       ;;
   esac
+
+  # ── Monitor reporting ──────────────────────────────────────
+  ITER_DURATION=$(( $(date +%s) - ITER_START ))
+
+  # Story info (current story being attempted)
+  STORY_ID=$(jq -r '[.userStories[] | select(.passes == false)] | sort_by(.priority) | .[0].id // empty' prd.json 2>/dev/null)
+  STORY_TITLE=$(jq -r '[.userStories[] | select(.passes == false)] | sort_by(.priority) | .[0].title // empty' prd.json 2>/dev/null)
+
+  # Token counts from coder + validator logs
+  CODER_LOG="$LOG_DIR/iteration-${ITER_PAD}-coder.log"
+  INPUT_TOKENS=$(grep -oE 'input_tokens[": ]+[0-9]+' "$CODER_LOG" 2>/dev/null | grep -oE '[0-9]+' | tail -1)
+  OUTPUT_TOKENS=$(grep -oE 'output_tokens[": ]+[0-9]+' "$CODER_LOG" 2>/dev/null | grep -oE '[0-9]+' | tail -1)
+  CACHE_READ=$(grep -oE 'cache_read[": ]+[0-9]+' "$CODER_LOG" 2>/dev/null | grep -oE '[0-9]+' | tail -1)
+
+  curl -s --max-time 5 -X POST "$MONITOR_URL" \
+    -H 'Content-Type: application/json' \
+    -d "{
+      \"iteration\": $ITERATION,
+      \"max_iterations\": $MAX_ITERATIONS,
+      \"story_id\": \"${STORY_ID:-unknown}\",
+      \"story_title\": \"${STORY_TITLE:-unknown}\",
+      \"input_tokens\": ${INPUT_TOKENS:-0},
+      \"output_tokens\": ${OUTPUT_TOKENS:-0},
+      \"cache_read_tokens\": ${CACHE_READ:-0},
+      \"cache_write_tokens\": 0,
+      \"duration_seconds\": $ITER_DURATION,
+      \"passed\": $ITER_PASSED,
+      \"cost\": 0
+    }" > /dev/null 2>&1 || true
+  # ──────────────────────────────────────────────────────────
+
+  # Break after reporting if DONE
+  [ "$verdict" -eq 2 ] 2>/dev/null && break
 done
 
 log ""
