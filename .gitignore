@@ -2,4 +2,10 @@ node_modules/
 .env
 .DS_Store
 harness/logs/
+harness/status.json
 CLAUDE.local.md
+*.db
+*.db-shm
+*.db-wal
+dist/
+*.tsbuildinfo
