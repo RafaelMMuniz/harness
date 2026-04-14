@@ -90,6 +90,34 @@ Three sizes. Weight carries the hierarchy.
 | Table cell (number) | `text-sm font-medium text-neutral-900 text-right tabular-nums` |
 | Metric label | `text-sm font-bold text-neutral-500` |
 
+## Surface Elevation
+
+Surfaces stack with whisper-quiet shifts. Each jump is a few percentage points of lightness — barely visible in isolation, but perceptible when surfaces overlap.
+
+```
+Level 0: Page canvas         bg-neutral-100  (#F5F5F5)  — the ground
+Level 1: Cards, panels       bg-neutral-50   (#FAFAFA)  — lifted content
+Level 2: Dropdowns, popovers — shadcn defaults (slight shadow + border)
+Sidebar: Inverted stack      bg-neutral-900  (#171717)  — anchoring nav
+Chart:   Warm container      bg-[#FEF9F3]              — only warm surface
+```
+
+Never skip levels. Never use different hues for different elevations (except chart containers). The border at `border-neutral-300` quietly defines edges between same-level siblings.
+
+**Inputs** are slightly inset — use the card surface (`bg-neutral-50`) on the page background, or match their container's surface. Inputs receive content; they don't project it.
+
+## Border Hierarchy
+
+Not all borders are equal. Match intensity to importance:
+
+| Role | Tailwind | When |
+|------|----------|------|
+| Standard separation | `border-neutral-300` | Cards, table rows, dividers |
+| Emphasis | `border-neutral-900` | Error containers, strong outlines |
+| Focus ring | `ring-neutral-900` or `ring-offset-2` | Keyboard focus indicators |
+
+Avoid borders darker than `neutral-300` for standard separation. The squint test: blur your eyes. You should still perceive structure, but no single border should jump out.
+
 ## Spacing
 
 Use Tailwind spacing scale. Key patterns:
@@ -101,3 +129,5 @@ Use Tailwind spacing scale. Key patterns:
 | Page padding | `p-8` |
 | Section gap | `gap-6` or `space-y-6` |
 | Control gap | `gap-3` |
+
+Symmetrical padding — if top is `p-6`, all sides are `p-6`. Exception: control bars use `p-4` with `gap-3` between controls, which may read slightly tighter horizontally. Keep padding on the defined scale. Random values (`p-5`, `p-7`, `px-3 py-5`) signal no system.

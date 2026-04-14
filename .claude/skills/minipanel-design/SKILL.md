@@ -5,8 +5,8 @@ description: >
   "build a component", "create a page", "add a chart", "style the UI", "fix the layout",
   "implement the frontend", "add a view", or any task involving visual elements, Tailwind classes,
   shadcn/ui components, or page layouts in MiniPanel. Also trigger on mentions of "design system",
-  "color palette", "typography", "chart colors", or "sidebar".
-version: 0.1.0
+  "color palette", "typography", "chart colors", "sidebar", or "interface design".
+version: 0.2.0
 ---
 
 # MiniPanel Design System
@@ -22,13 +22,30 @@ MiniPanel uses **Tailwind CSS** for styling and **shadcn/ui** for components. Al
 5. **Three text sizes.** `text-2xl` for titles/metrics, `text-sm` for everything else. Weight carries hierarchy — `font-black` for emphasis, `font-bold` for body, `font-medium` for table cells.
 6. **Right-align numbers.** Always use `text-right tabular-nums` for numeric table cells.
 
+## Craft Principles
+
+These principles prevent generic output. The design tokens and component patterns below are the WHAT. These principles are the HOW.
+
+**Every choice must be a choice.** For every decision — color, spacing, layout, component — be able to explain WHY. If the answer is "it's common" or "it looks clean," you haven't chosen. You've defaulted. MiniPanel's design brief already made these choices. Follow them precisely rather than reaching for familiar patterns.
+
+**Subtle layering is the backbone.** Surfaces stack: page (`bg-neutral-100`) → card (`bg-neutral-50`) → dropdown (slightly above). The shifts are whisper-quiet — you feel the hierarchy without seeing it. Never make dramatic surface jumps. Never use different hues for different elevation levels. Borders at `border-neutral-300` define edges without demanding attention.
+
+**Every interactive element needs life.** Buttons, links, table rows — everything clickable responds to hover and press. Not dramatically: `hover:bg-neutral-200` for table rows, `hover:bg-neutral-800` for primary buttons. Missing states make an interface feel like a screenshot, not software.
+
+**Composition has rhythm.** Dense control bars give way to open chart areas. The sidebar at `w-60` serves the content area — proportions declare what matters. Every screen has one thing the user came to do. That thing dominates through size, position, or the space around it.
+
+**After building, critique before showing.** Squint at the output. Can you still perceive hierarchy? Is anything jumping out harshly? If you swapped your implementation for a generic dashboard template, would it feel meaningfully different? The places where swapping wouldn't matter are the places you defaulted.
+
+For the full craft reference (layering examples, critique protocol, validation checks): Read `references/craft.md`
+
 ## Quick Reference
 
 Before writing any component, read the detailed references:
 
-- **Design tokens** (colors, type, spacing): Read `references/design-tokens.md`
+- **Design tokens** (colors, type, spacing, surface elevation): Read `references/design-tokens.md`
 - **Component patterns** (buttons, cards, tables, selects, badges, states): Read `references/component-patterns.md`
 - **Page layouts** (events, trends, funnels, users, sidebar, content area): Read `references/layouts.md`
+- **Craft** (layering, critique protocol, validation, anti-patterns): Read `references/craft.md`
 
 ## Core Color Tokens
 

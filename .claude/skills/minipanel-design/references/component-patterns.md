@@ -170,3 +170,38 @@ Use shadcn `<Skeleton>`:
 ```
 
 Never show raw errors, stack traces, or technical details to users.
+
+## Animation
+
+Keep it fast and functional. Micro-interactions (hover, focus) should feel instant — use `transition-colors duration-150`. Larger transitions (expanding rows, panel slides) can be slightly longer — `duration-200`.
+
+Use `ease-out` easing. Avoid spring/bounce effects — MiniPanel is a professional analytics tool, not a playful consumer app.
+
+```tsx
+{/* Standard hover transition for interactive elements */}
+className="transition-colors duration-150"
+
+{/* Panel or row expansion */}
+className="transition-all duration-200 ease-out"
+```
+
+## Iconography
+
+Icons clarify, not decorate. If removing an icon loses no meaning, remove it. Use a single icon library (Lucide React) throughout. Give standalone icons presence only when they serve as the primary element (e.g., empty states). Icons next to text should align optically.
+
+```tsx
+{/* Icon as label companion — align with text */}
+<div className="flex items-center gap-2">
+  <ChevronDown className="h-4 w-4 text-neutral-500" />
+  <span className="text-sm font-bold text-neutral-900">Details</span>
+</div>
+
+{/* Standalone icon in empty state */}
+<Search className="h-12 w-12 text-neutral-300 mb-4" />
+```
+
+## Controls: Never Native
+
+Never use native `<select>`, `<input type="date">`, or `<input type="checkbox">`. Native form elements render OS-native widgets that cannot be styled. Always use shadcn components: `<Select>`, `<Popover>` with calendar, `<Checkbox>`.
+
+Custom select triggers must keep text and chevron on the same row — shadcn handles this, but if building custom triggers, use `inline-flex` with `whitespace-nowrap`.
