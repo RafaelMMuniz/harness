@@ -20,7 +20,7 @@
         "TypeScript compiles with no errors: npx tsc --noEmit passes on all e2e/ files",
         "git commit with message 'test: add Playwright config and shared API helpers'"
       ],
-      "priority": -5,
+      "priority": -10,
       "passes": false,
       "notes": "This is test infrastructure only. The helpers define the API contract that the implementation must fulfill. Use the Playwright test() and expect() imports from @playwright/test."
     },
@@ -59,7 +59,7 @@
         "npx playwright test --list lists all API test cases without errors",
         "git commit with message 'test: add API contract tests for events, queries, and users'"
       ],
-      "priority": -4,
+      "priority": -9,
       "passes": false,
       "notes": "Tests seed their own data using createEvent() and createBatchEvents() helpers in beforeAll hooks. Each test file should create fresh data with unique identifiers to avoid cross-test interference. API tests use the Playwright request fixture directly — no browser needed."
     },
@@ -77,7 +77,7 @@
         "npx playwright test --list lists all 4 identity test cases",
         "git commit with message 'test: add identity resolution E2E tests (BR-101 scenarios)'"
       ],
-      "priority": -3,
+      "priority": -8,
       "passes": false,
       "notes": "Use unique test- prefixed IDs in each test to avoid collisions with other test files. Each test should be independent — seed its own data in beforeEach or at the start of the test. These tests mirror the 'How to verify' section from the business requirements."
     },
@@ -99,7 +99,7 @@
         "npx playwright test --list lists all Events page test cases",
         "git commit with message 'test: add UI E2E tests for Events explorer page'"
       ],
-      "priority": -2,
+      "priority": -7,
       "passes": false,
       "notes": "The beforeAll data seeding uses the API helpers which POST to http://localhost:3001 directly. Use data-testid attributes in selectors where possible for resilience. For the empty state test, filter by a non-existent event name. The pagination test needs at least 51 events (default page size is 50) to verify Next works."
     },
@@ -127,7 +127,7 @@
         "npx playwright test --list lists all navigation and user lookup test cases",
         "git commit with message 'test: add UI E2E tests for navigation and user lookup'"
       ],
-      "priority": -1,
+      "priority": -6,
       "passes": false,
       "notes": "Navigation tests don't need seeded data — they test the shell layout and routing. User lookup tests need the identity resolution scenario seeded via API to verify retroactive merge in the UI. Use data-testid on search input and button for resilient selectors."
     },
@@ -157,7 +157,7 @@
         "npx playwright test --list lists all trend and property API test cases",
         "git commit with message 'test: add API contract tests for trends and property metadata'"
       ],
-      "priority": -10,
+      "priority": -5,
       "passes": false,
       "notes": "Seed events with known numeric properties (amount, quantity) and string properties (url, button_name) so type detection can be verified. Use unique test- prefixed identifiers."
     },
@@ -183,7 +183,7 @@
         "npx playwright test --list lists all funnel and saved analyses test cases",
         "git commit with message 'test: add API contract tests for funnels and saved analyses'"
       ],
-      "priority": -9,
+      "priority": -4,
       "passes": false,
       "notes": "For funnel tests, seed events for multiple users with known step sequences and timestamps. Include an identity resolution scenario where a user starts anonymous and identifies between steps."
     },
@@ -211,7 +211,7 @@
         "npx playwright test --list lists all Trends page test cases",
         "git commit with message 'test: add UI E2E tests for Trends page'"
       ],
-      "priority": -8,
+      "priority": -3,
       "passes": false,
       "notes": "Use data-testid attributes for chart type toggles, measure/breakdown selectors. The chart rendering tests should check for the presence of SVG elements, not exact pixel values."
     },
@@ -238,7 +238,7 @@
         "npx playwright test --list lists all funnel and user profile test cases",
         "git commit with message 'test: add UI E2E tests for Funnels page and enhanced user profile'"
       ],
-      "priority": -7,
+      "priority": -2,
       "passes": false,
       "notes": "Funnel tests need users who progressed through multiple steps. Seed at least 10 users with step 1, 7 with step 2, 3 with step 3 for realistic conversion rates. User profile tests need a multi-device identity scenario."
     },
