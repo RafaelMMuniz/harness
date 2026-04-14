@@ -18,6 +18,7 @@ The keywords "MUST", "MUST NOT", "SHOULD", "SHOULD NOT", and "MAY" in this docum
 - MUST NOT require external API keys, paid services, or third-party accounts.
 - MUST NOT require user authentication.
 - MUST include at least one automated test that verifies identity resolution.
+- MUST follow test-first development: `prd.json` stories with negative priority write Playwright E2E tests before implementation begins. Implementation stories (priority >= 1) MUST NOT modify files in `e2e/`.
 
 ---
 

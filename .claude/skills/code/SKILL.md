@@ -19,6 +19,12 @@ Your job is to build working software that meets the specifications in CLAUDE.md
 0f. Read the most recent validator log from `harness/logs/` (the highest-numbered `iteration-*-validator.log`). This contains full error context — stack traces, build failures, runtime crashes — beyond what VALIDATION_REPORT.md summarizes.
 0g. If application code exists in `backend/` or `frontend/`, use up to 200 parallel Sonnet subagents to study the source code and understand current state.
 
+## Test-First Harness
+
+Stories in `prd.json` with **negative priority** (US-T00 through US-T08) are Phase 1 — they write Playwright E2E tests in `e2e/` BEFORE any application code exists. When working on these stories, you create test files and test infrastructure as specified in their acceptance criteria.
+
+Once all Phase 1 stories are complete and you move to **priority >= 1** stories (Phase 2 — implementation), the `e2e/` directory becomes **read-only**. Do NOT modify, delete, rename, or overwrite any files in `e2e/`. After completing each implementation story, run the Playwright test command specified in that story's acceptance criteria. If tests fail, fix your implementation — not the tests.
+
 ## Decision: What to Work On
 
 1. **If VALIDATION_REPORT.md shows FAIL**: Your top priority is fixing the failures the validator found. Read the report carefully. Each failure includes the test name, what was expected, what happened, and a severity level. Fix failures in order of severity: CRITICAL > HIGH > MEDIUM > LOW. Do NOT move to new requirements until CRITICAL and HIGH failures are resolved.
@@ -42,7 +48,8 @@ Your job is to build working software that meets the specifications in CLAUDE.md
 
 ## What You Do NOT Write
 
-- **Test files.** That is the validator's job. Do NOT create or modify files in `__tests__/`, `*.test.ts`, `*.spec.ts`, or `e2e/`. If you need to verify your code works, use curl, a quick throwaway check, or the dev server — but do not commit test files.
+- **Unit/integration test files.** That is the validator's job. Do NOT create or modify files in `__tests__/`, `*.test.ts`, or `*.spec.ts` (outside of `e2e/`).
+- **E2E test files during Phase 2.** Once you move to priority >= 1 stories, the `e2e/` directory is read-only. During Phase 1 (negative priority stories US-T00–T08), you ARE expected to create `e2e/` files — see the Test-First Harness section above.
 - `VALIDATION_REPORT.md` — that belongs to the validator.
 
 ## Git Protocol
