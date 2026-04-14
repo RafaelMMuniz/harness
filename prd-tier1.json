@@ -20,7 +20,7 @@
         "Typecheck passes for both client and server"
       ],
       "priority": 1,
-      "passes": true,
+      "passes": false,
       "notes": "This is the skeleton. Keep it minimal — no business logic yet. Use npm workspaces or a simple concurrently setup."
     },
     {
@@ -51,12 +51,13 @@
         "Valid events are inserted into the events table and return 201 with the stored event object including its generated id",
         "Invalid events return 400 with a JSON error body containing a human-readable message describing what is missing or wrong",
         "If the event contains both device_id and user_id, an identity mapping is created or confirmed (INSERT OR IGNORE into identity_mappings)",
+        "If the event contains both device_id and user_id, and that device_id is already mapped to a DIFFERENT user_id in identity_mappings, reject the event with HTTP 409 and body: { error: 'device_id is already mapped to a different user' }. Do NOT insert the event.",
         "Properties object is serialized to a JSON string before storage",
         "Typecheck passes"
       ],
       "priority": 3,
       "passes": false,
-      "notes": "Identity mapping creation here is a side effect of event ingestion — it's the core of the simplified merge model. INSERT OR IGNORE handles the case where the mapping already exists. If a device_id is already mapped to a different user_id, reject the event with a 409 Conflict."
+      "notes": "Identity mapping creation here is a side effect of event ingestion — it's the core of the simplified merge model. INSERT OR IGNORE handles the case where the mapping already exists. Check for identity conflict BEFORE inserting the event."
     },
     {
       "id": "US-004",
@@ -68,8 +69,9 @@
         "Each event in the array is validated individually with the same rules as POST /api/events",
         "All valid events in the batch are inserted in a single SQLite transaction for performance",
         "Identity mappings are created for any events with both device_id and user_id",
+        "If an event in the batch would create a device_id mapping that conflicts with an existing mapping (device already mapped to a different user), that individual event is skipped and reported in the errors array — it does NOT abort the entire batch",
         "Returns 200 with a JSON body: { accepted: number, errors: Array<{ index: number, message: string }> }",
-        "If any individual event fails validation, it is skipped (not inserted) and reported in the errors array, but the rest of the batch succeeds",
+        "If any individual event fails validation or has an identity conflict, it is skipped (not inserted) and reported in the errors array, but the rest of the batch succeeds",
         "Typecheck passes"
       ],
       "priority": 4,
@@ -83,8 +85,8 @@
       "acceptanceCriteria": [
         "A resolveIdentity(deviceOrUserId: string) function exists that: given a user_id, returns that user_id; given a device_id, looks up the identity_mappings table and returns the mapped user_id if one exists, otherwise returns the device_id as-is",
         "A getEventsForUser(userId: string) function exists that returns all events attributed to a resolved user: events where user_id matches, PLUS events where device_id is mapped to that user_id via identity_mappings",
-        "GET /api/events?user_id=<id> returns all resolved events for that user, sorted by timestamp ascending",
-        "GET /api/events?device_id=<id> resolves the device to a user (if mapping exists) and returns all events for that resolved user",
+        "GET /api/events?user_id=<id> returns all resolved events for that user, sorted by timestamp ascending (oldest first — this is the user timeline view, distinct from the paginated list in US-007 which sorts descending/newest first)",
+        "GET /api/events?device_id=<id> resolves the device to a user (if mapping exists) and returns all events for that resolved user, sorted by timestamp ascending",
         "Response includes an array of event objects with parsed properties (JSON object, not string)",
         "The merge is retroactive: events recorded before the identity mapping was created are included",
         "Typecheck passes"
