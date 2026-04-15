@@ -15,7 +15,13 @@
 
 ## Known Issues
 
-_(none active)_
+### [iter-11] 2026-04-15 — US-006 deadlock: test-writing story vs coder anti-test rule
+
+US-006 "Write automated tests for identity resolution" is a story whose entire deliverable is test files (`server/src/__tests__/identity-resolution.test.ts`) and test runner configuration (`test` script in `server/package.json`). The validator wrote a meta-test (`US-006.test.ts`) that checks for these deliverables, but the coder skill forbids writing any test files ("You do NOT write tests. Ever.") and specifically says to skip stories titled "write tests for X" with a no-op commit.
+
+This creates a deadlock: the meta-test expects deliverables that only the validator can create (per coder rules), but the validator only writes meta-tests. The coder skipped in iteration 10 (commit d4a496b) and is skipping again now.
+
+**Resolution needed:** Either (a) the validator should create `identity-resolution.test.ts` and configure the test runner, or (b) the harness should mark US-006 as a validator-only story that doesn't require coder action, or (c) the coder rules should be relaxed for stories whose deliverables are explicitly test files.
 
 
 ## Decisions
