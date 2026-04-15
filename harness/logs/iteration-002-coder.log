@@ -219,3 +219,26 @@ TypeScript compiles cleanly, and all 23 test cases are listed across 3 files. Le
 [2m   [coder] US-T01: test: add API contract tests for events, queries, and users[0m
 [2m   [0m
 [2m   ... +3 more lines[0m
+[32m   ↳ Result:[0m
+[90m     [main c81b71a] [coder] US-T01: test: add API contract tests for events, queries, and users[0m
+[90m      6 files changed, 699 insertions(+), 1 deletion(-)[0m
+[90m      create mode 100644 e2e/api-events.spec.ts[0m
+[90m      create mode 100644 e2e/api-queries.spec.ts[0m
+[90m      create mode 100644 e2e/api-users.spec.ts[0m
+[90m     [2m... +2 more lines[0m[0m
+
+[36m🔧 TodoWrite[0m
+[2m   6 tasks[0m
+[32m   ↳ Result:[0m
+[90m     Todos have been modified successfully. Ensure that you continue to use the todo list to track your progress. Please p...[0m
+**US-T01 complete.** Created 3 API contract test files with 23 test cases covering all specified endpoints:
+
+- `e2e/api-events.spec.ts` — 11 tests for POST /api/events (single) and POST /api/events/batch
+- `e2e/api-queries.spec.ts` — 9 tests for GET /api/events (filters/pagination), GET /api/events/names, GET /api/stats/overview
+- `e2e/api-users.spec.ts` — 3 tests for GET /api/users/:id (known user, device resolution, 404)
+
+TypeScript compiles cleanly, all tests list without errors. Each file uses unique prefixed identifiers to prevent cross-test collisions.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[32m✅ Done[0m in 3m 29s | Cost: $1.0972 | Tokens: ↓22 ↑12,915 | Tools: 29
+STATS input_tokens:22 output_tokens:12915 cache_read:928815 cache_write:49568 cost_usd:1.0971925000000002
