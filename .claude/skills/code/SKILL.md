@@ -23,7 +23,24 @@ Your job is to build working software that meets the specifications in CLAUDE.md
 
 Stories in `prd.json` with **negative priority** (US-T00 through US-T08) are Phase 1 — they write Playwright E2E tests in `e2e/` BEFORE any application code exists. When working on these stories, you create test files and test infrastructure as specified in their acceptance criteria.
 
-Once all Phase 1 stories are complete and you move to **priority >= 1** stories (Phase 2 — implementation), the `e2e/` directory becomes **read-only**. Do NOT modify, delete, rename, or overwrite any files in `e2e/`. After completing each implementation story, run the Playwright test command specified in that story's acceptance criteria. If tests fail, fix your implementation — not the tests.
+Once all Phase 1 stories are complete and you move to **priority >= 1** stories (Phase 2 — implementation), the `e2e/` directory is **read-only by default**. When a test fails, your first and strongest assumption must be that the IMPLEMENTATION is wrong — fix your code, not the test.
+
+### E2E Bug Escape Hatch (Phase 2 only)
+
+You MAY modify a Phase 1 E2E test only if it is **provably buggy**. A test qualifies as provably buggy if AND ONLY IF one of these is true:
+
+1. **Internal contradiction** — two tests require behavior that cannot simultaneously be true (e.g., one asserts HTTP 200 for POST /api/events while another asserts HTTP 201 for the same endpoint). Fix by aligning with the HTTP standard or spec; keep the stricter test.
+2. **References non-existent state** — the test interacts with data that does not and cannot exist (e.g., `selectOption('__nonexistent_event__')` on a dropdown populated from API data). Fix by either using a real value from seeded data or removing the invalid assertion while preserving the test's behavioral intent.
+3. **Depends on cross-test state leakage** — the test passes in isolation but fails when run with others because it does not clean up or isolate its data. Fix by adding proper isolation (unique identifiers, `beforeAll`/`afterAll` cleanup, scoped selectors). Do NOT weaken assertions.
+
+**Hard rules when exercising the escape hatch:**
+
+- **Preserve the test's behavioral intent.** Never weaken an assertion to make it pass. If the test asserts "3 events appear after merge," the fix must still verify 3 events — change HOW you set up the test, not WHAT it verifies.
+- **Document every fix in IMPLEMENTATION_PLAN.md** under a section titled `## E2E Test Fixes`. For each fix include: the test path and line, which of the 3 criteria above applies, what changed, and why the behavioral intent is preserved.
+- **Commit message must start with `[coder] fix-e2e:`** followed by the test path and a one-line reason. Example: `[coder] fix-e2e: ui-events.spec.ts:277 — removed selectOption on non-seeded option name`.
+- **Default to fixing the implementation.** If you can satisfy the test by changing your code instead, do that. Use the escape hatch only when the test itself is wrong.
+
+After completing each implementation story, run the Playwright test command specified in that story's acceptance criteria. If tests fail, diagnose whether the implementation is wrong or the test is provably buggy — and act accordingly.
 
 ## Decision: What to Work On
 
@@ -50,7 +67,7 @@ Once all Phase 1 stories are complete and you move to **priority >= 1** stories 
 ## What You Do NOT Write
 
 - **Unit/integration test files.** That is the validator's job. Do NOT create or modify files in `__tests__/`, `*.test.ts`, or `*.spec.ts` (outside of `e2e/`).
-- **E2E test files during Phase 2.** Once you move to priority >= 1 stories, the `e2e/` directory is read-only. During Phase 1 (negative priority stories US-T00–T08), you ARE expected to create `e2e/` files — see the Test-First Harness section above.
+- **E2E test files during Phase 2 — except when provably buggy.** Once you move to priority >= 1 stories, the `e2e/` directory is read-only by default. The narrow exception is the E2E Bug Escape Hatch defined in the Test-First Harness section above. During Phase 1 (negative priority stories US-T00–T08), you ARE expected to create `e2e/` files.
 - `VALIDATION_REPORT.md` — that belongs to the validator.
 
 ## Git Protocol

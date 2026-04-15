@@ -141,6 +141,17 @@ while true; do
   log ""
   log "======================== ITERATION $ITERATION ========================"
 
+  # --- Wipe runtime DB so E2E tests get a fresh seeded state ---
+  # The backend auto-seeds on empty DB (per BR-102), so removing these files
+  # forces a deterministic starting state each iteration and eliminates stale-data
+  # test failures caused by accumulation across runs.
+  if [ -f "$PROJECT_ROOT/backend/minipanel.db" ] || [ -f "$PROJECT_ROOT/backend/minipanel.db-wal" ]; then
+    rm -f "$PROJECT_ROOT/backend/minipanel.db" \
+          "$PROJECT_ROOT/backend/minipanel.db-wal" \
+          "$PROJECT_ROOT/backend/minipanel.db-shm"
+    log "Wiped backend/minipanel.db* for clean iteration state."
+  fi
+
   # --- PHASE 1: CODER ---
   if [ "$MODE" != "validate-only" ]; then
     CODER_LOG="$LOG_DIR/iteration-${ITER_PAD}-coder.log"

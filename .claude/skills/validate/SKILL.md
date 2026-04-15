@@ -106,16 +106,16 @@ Requirements from CLAUDE.md that have no test coverage yet:
 
 ### Verdict Rules
 
-- **FAIL**: Any CRITICAL or HIGH failure exists.
-- **PASS**: All CRITICAL and HIGH tests pass. MEDIUM/LOW failures are noted but do not block.
+- **FAIL**: Any failing test — backend, frontend, or E2E — counts as a failure. Classify by severity but DO NOT mark any failing test as "irreconcilable" and skip it. If a test is genuinely buggy, the coder has an escape hatch (documented in the coder skill) to fix it; your job is to report the failure, not absolve it.
+- **PASS**: Every test that exists passes. No exceptions for "known issues" or "environmental" failures. If tests share state and fail due to accumulation, that IS an implementation bug — either in the test isolation or in the seeding strategy.
 - **DONE**: ALL of the following are true:
   1. Every requirement from BR-100 through BR-305 that has been implemented is validated with passing tests.
   2. All "Verification" scenarios from CLAUDE.md pass.
-  3. There are no CRITICAL or HIGH failures.
+  3. Every test in the project passes — backend vitest suites AND Playwright E2E. Zero exceptions.
   4. There are no coverage gaps for Tier 1 (BR-100 to BR-103) or Tier 2 (BR-200 to BR-201) requirements.
   5. Identity resolution tests pass comprehensively.
 
-Only set DONE when you are confident the project meets its specifications. You are the sole arbiter.
+Only set DONE when every test passes. If even one Playwright test fails, the verdict is FAIL — full stop. The coder is allowed to fix provably-buggy E2E tests (see the escape hatch in their skill), so there is no such thing as an "unfixable" test failure.
 
 ## What You Write
 
@@ -127,7 +127,7 @@ Only set DONE when you are confident the project meets its specifications. You a
 ## What You Do NOT Write
 
 - Application source code. Do NOT modify files in `backend/src/` (except `__tests__/`), `frontend/src/` (except `__tests__/`), or any configuration that affects the running application.
-- **E2E test files in `e2e/`.** The coder writes these during Phase 1 (negative priority stories in `prd.json`). They are the behavioral specification. Do NOT modify, delete, or overwrite them. Your tests go in `backend/src/__tests__/`, `frontend/src/__tests__/`, or other test directories — not `e2e/`.
+- **E2E test files in `e2e/`.** The coder writes these during Phase 1 (negative priority stories in `prd.json`). They are the behavioral specification. Do NOT modify, delete, or overwrite them. The coder has a narrow escape hatch to fix provably-buggy E2E tests during Phase 2 — that is their domain, not yours. Your tests go in `backend/src/__tests__/`, `frontend/src/__tests__/`, or other test directories — not `e2e/`.
 - `IMPLEMENTATION_PLAN.md` — that belongs to the coder.
 
 ## Git Protocol
@@ -143,7 +143,8 @@ After writing/updating tests and the validation report:
 999. **Distrust the happy path.** If the coder built a working event API, great — now send malformed JSON, empty strings, missing fields, SQL injection attempts in property values.
 9999. **Identity resolution gets 10x more test attention** than anything else. It's the hardest requirement and the most likely to be subtly wrong. The spec says "if identity resolution is wrong, every number is wrong."
 99999. **Be specific in failure reports.** "Test failed" is useless. "Expected 5 events for user-Y after retroactive merge of device-X, got 1 — only the identifying event was returned, the 4 prior anonymous events were not attributed" tells the coder exactly what to fix.
-999999. **Don't weaken tests to make them pass.** If a test fails, the implementation is wrong, not the test. The only exception: if you realize your test misreads the spec, fix the test AND explain why in the report.
+999999. **Don't weaken tests to make them pass.** If a test fails, the implementation is wrong, not the test. The only exception: if you realize your own test (in `backend/src/__tests__/` etc., NOT `e2e/`) misreads the spec, fix the test AND explain why in the report.
+9999999. **No "irreconcilable" escape.** Do not classify any failing test as "known issue" or "test design problem" to avoid the FAIL verdict. If an E2E test is genuinely buggy, the coder has an escape hatch to fix it — flag the failure, let the next coder iteration deal with it. Your job is to count failures honestly, not to pardon them.
 9999999. **Severity matters.** A broken identity merge is CRITICAL. A missing loading spinner is LOW. Triage accordingly — the coder prioritizes fixes by severity.
 
 Execute the instructions above.
