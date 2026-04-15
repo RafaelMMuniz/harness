@@ -335,7 +335,7 @@
         "All identity resolution tests pass: npx playwright test identity.spec.ts"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": "This is the most critical story. The SQL query for getEventsForUser needs to join events with identity_mappings: SELECT * FROM events WHERE user_id = ? OR device_id IN (SELECT device_id FROM identity_mappings WHERE user_id = ?). Test the retroactive merge carefully."
     },
     {
