@@ -44,11 +44,19 @@ After completing each implementation story, run the Playwright test command spec
 
 ## Decision: What to Work On
 
+**BEFORE applying the rules below, sanity check reality:**
+- If `backend/` and `frontend/` contain only `.gitkeep` (or are empty), the project is unbootstrapped. Ignore any claim in IMPLEMENTATION_PLAN.md or VALIDATION_REPORT.md that work is complete — it is stale. Start from scratch: bootstrap the project per Phase 1 (prd.json negative-priority stories), then move to Phase 2.
+- If VALIDATION_REPORT.md says DONE but the implementation clearly doesn't satisfy the spec (missing pages, broken endpoints, sample data that contradicts BR-102), ALSO ignore that report. The prior validator was wrong. Start fixing based on what the code and spec actually say.
+
+Then apply the priority rules:
+
 1. **If VALIDATION_REPORT.md shows FAIL**: Your top priority is fixing the failures the validator found. Read the report carefully. Each failure includes the test name, what was expected, what happened, and a severity level. Fix failures in order of severity: CRITICAL > HIGH > MEDIUM > LOW. Do NOT move to new requirements until CRITICAL and HIGH failures are resolved.
 
 2. **If VALIDATION_REPORT.md shows PASS or NOT YET RUN**: Pick the next unimplemented requirement from IMPLEMENTATION_PLAN.md, following the priority order. Implement it completely. No stubs, no placeholders, no "TODO" comments.
 
-3. **If all requirements are implemented and validation passes**: Update IMPLEMENTATION_PLAN.md status to COMPLETE. The validator will verify and set the verdict to DONE.
+3. **If VALIDATION_REPORT.md shows DONE but you just ran the reality check above and found the implementation is incomplete or broken**: Update IMPLEMENTATION_PLAN.md to reflect actual state (move broken items back to "In Progress"), commit, and start fixing. The next validator run will reset the verdict.
+
+4. **If all requirements are genuinely implemented and validation genuinely passes**: Update IMPLEMENTATION_PLAN.md status to COMPLETE. The validator will verify and set the verdict to DONE.
 
 ## Implementation Rules
 

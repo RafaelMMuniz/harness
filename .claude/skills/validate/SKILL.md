@@ -28,7 +28,8 @@ You write tests based on **CLAUDE.md** (the specifications), NOT based on readin
 
 ### Step 1: Determine What to Validate
 
-- Read IMPLEMENTATION_PLAN.md to see what the coder claims is done.
+- Read IMPLEMENTATION_PLAN.md to see what the coder claims is done. **Treat these claims skeptically.** Your job is to verify, not to trust.
+- Check reality: if `backend/` or `frontend/` are empty while the plan says everything is complete, the plan is stale — verdict is FAIL with a note that the project is unbootstrapped.
 - Map completed items back to CLAUDE.md requirements.
 - Each completed requirement needs tests if tests don't already exist or if the implementation changed since tests were last written.
 
@@ -66,10 +67,21 @@ Write tests based on the specs. Organize them by concern:
 
 ### Step 3: Run All Tests
 
-- Run the test suite. Check AGENTS.md for the correct command.
-- Run typecheck if available.
-- Capture all output — pass and fail — for the report.
-- If you cannot run tests because the project isn't bootstrapped yet (no package.json, no test framework), note this clearly in the report.
+You MUST run every test layer that exists in the project. No skipping layers.
+
+Mandatory test commands (run each one, capture full output):
+1. **Backend unit/integration tests** — typically `npm test` or `cd backend && npm test`
+2. **Playwright E2E tests** — typically `npx playwright test` or `npm run e2e`. If a dev server is required, start it first (`npm run dev &`), wait for it to be ready, run the tests, then kill it.
+3. **TypeScript typecheck** — `npm run typecheck` or `npx tsc --noEmit` in each workspace
+4. **Lint (if configured)** — `npm run lint`
+
+In addition:
+5. **Manually exercise the running app.** Start the dev server, open each frontend page via curl/wget (or Playwright in headed mode), and verify the HTML response is not empty and does not contain error markers. BR-305 and page-rendering correctness cannot be verified by test files alone.
+6. **Sanity check sample data against BR-102.** Query the database after auto-seed: is event count ≥ 10,000? Are there ≥ 50 resolved users? Do all 5 event types have appropriate properties (including numeric ones)? Are identity scenarios covered? If auto-seed falls short, that is a FAIL — BR-102 is a MUST requirement.
+
+If you cannot run tests because the project isn't bootstrapped yet (no package.json, no test framework), note this clearly in the report with verdict FAIL.
+
+**Skipping any of these steps invalidates the verdict.** If you declare PASS or DONE without running Playwright AND without sanity-checking auto-seed against BR-102, you are lying to the coder and the project will ship broken.
 
 ### Step 4: Write the Validation Report
 

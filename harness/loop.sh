@@ -10,6 +10,17 @@ set -eo pipefail
 #   ./harness/loop.sh --code-only        # Run just the coder (debugging)
 #   ./harness/loop.sh --validate-only    # Run just the validator (debugging)
 #   ./harness/loop.sh --clean            # Wipe logs before starting
+#   ./harness/loop.sh --fresh            # Full reset: wipe code, state, logs, DB; then iterate
+#
+# The --fresh flag is the "nuclear restart" — use it when you want to wipe
+# all prior implementation work and let the harness iterate from a clean slate.
+# It:
+#   1. Deletes everything inside backend/ and frontend/ except .gitkeep
+#   2. Resets VALIDATION_REPORT.md to "NOT YET RUN"
+#   3. Resets IMPLEMENTATION_PLAN.md to the initial template
+#   4. Resets AGENTS.md to the initial template
+#   5. Wipes harness/logs/ and any runtime DB files
+#   6. Starts the normal iteration loop
 #
 # Run from the project root: /home/piero/bots/minipanel
 # ================================================================
@@ -30,15 +41,110 @@ MONITOR_URL="https://minipanel-monitor-production.up.railway.app/api/iterations"
 # --- Parse arguments ---
 MODE="full"  # full | code-only | validate-only
 CLEAN_LOGS=false
+FRESH_START=false
 
 for arg in "$@"; do
   case "$arg" in
     --code-only)      MODE="code-only" ;;
     --validate-only)  MODE="validate-only" ;;
     --clean)          CLEAN_LOGS=true ;;
+    --fresh)          FRESH_START=true; CLEAN_LOGS=true ;;
     [0-9]*)           MAX_ITERATIONS="$arg" ;;
   esac
 done
+
+# --- Fresh start: wipe all implementation, reset state files ---
+fresh_reset() {
+  echo "━━━━━━━━━━ --fresh: resetting project to clean slate ━━━━━━━━━━"
+
+  # 1. Wipe backend/ and frontend/ contents (keep .gitkeep)
+  if [ -d "$PROJECT_ROOT/backend" ]; then
+    find "$PROJECT_ROOT/backend" -mindepth 1 -not -name '.gitkeep' -delete 2>/dev/null || true
+    echo "  - Wiped backend/"
+  fi
+  if [ -d "$PROJECT_ROOT/frontend" ]; then
+    find "$PROJECT_ROOT/frontend" -mindepth 1 -not -name '.gitkeep' -delete 2>/dev/null || true
+    echo "  - Wiped frontend/"
+  fi
+
+  # 2. Remove stray runtime artifacts
+  rm -f "$PROJECT_ROOT"/*.db "$PROJECT_ROOT"/*.db-wal "$PROJECT_ROOT"/*.db-shm 2>/dev/null || true
+  rm -f "$PROJECT_ROOT"/backend/*.db "$PROJECT_ROOT"/backend/*.db-wal "$PROJECT_ROOT"/backend/*.db-shm 2>/dev/null || true
+  rm -rf "$PROJECT_ROOT/e2e" 2>/dev/null || true
+  echo "  - Removed runtime DB + e2e/ (Phase 1 will recreate)"
+
+  # 3. Reset VALIDATION_REPORT.md
+  cat > "$PROJECT_ROOT/VALIDATION_REPORT.md" <<'EOF'
+# Validation Report
+
+## Verdict: NOT YET RUN
+
+No validation has been performed yet. This is the first iteration.
+EOF
+  echo "  - Reset VALIDATION_REPORT.md"
+
+  # 4. Reset IMPLEMENTATION_PLAN.md
+  cat > "$PROJECT_ROOT/IMPLEMENTATION_PLAN.md" <<'EOF'
+# Implementation Plan
+
+## Status: NOT STARTED
+
+## Completed
+
+
+## In Progress
+
+
+## Next Up
+
+- BR-100: Event collection
+- BR-101: Identity resolution
+- BR-102: Sample data
+- BR-103: Application shell
+- BR-200: Event exploration
+- BR-201: Trend analysis
+- BR-300: Numeric aggregations
+- BR-301: Comparative visualization
+- BR-302: Dimensional breakdown
+- BR-303: Funnel analysis
+- BR-304: User profiles
+- BR-305: Visual coherence
+
+## Known Issues
+
+
+## Decisions
+
+EOF
+  echo "  - Reset IMPLEMENTATION_PLAN.md"
+
+  # 5. Reset AGENTS.md
+  cat > "$PROJECT_ROOT/AGENTS.md" <<'EOF'
+## Build & Run
+
+(Not yet bootstrapped — coder iteration 1 will populate this)
+
+## Validation
+
+(Not yet set up — validator iteration 1 will populate this)
+
+## Operational Notes
+
+(none yet)
+
+### Codebase Patterns
+
+(none yet)
+EOF
+  echo "  - Reset AGENTS.md"
+
+  echo "━━━━━━━━━━ fresh reset complete ━━━━━━━━━━"
+  echo ""
+}
+
+if [ "$FRESH_START" = true ]; then
+  fresh_reset
+fi
 
 # --- Logging setup ---
 LOG_DIR="$PROJECT_ROOT/harness/logs"
