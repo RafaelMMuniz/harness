@@ -164,6 +164,49 @@ describe('US-006: Automated tests for identity resolution', () => {
         'Expected test file to reference in-memory database setup (:memory:, sqlite, beforeEach). Spec requires fresh in-memory SQLite per test.',
       ).toBe(true);
     });
+
+    it('test file has substantive length (not trivial stubs)', () => {
+      // 4 real identity-resolution test scenarios with setup, actions, and assertions
+      // cannot be implemented in fewer than ~60 non-empty lines
+      const nonEmptyLines = testFileContent.split('\n').filter((l) => l.trim().length > 0);
+      expect(
+        nonEmptyLines.length,
+        `Expected identity-resolution test file to have at least 60 non-empty lines, found ${nonEmptyLines.length}. Real test scenarios require setup, actions, and assertions.`,
+      ).toBeGreaterThanOrEqual(60);
+    });
+
+    it('contains HTTP request or database operation patterns', () => {
+      // Real identity-resolution tests must exercise the system — either via API calls or DB ops
+      const hasHttpPatterns = /\b(fetch|request|supertest|axios|app\.(get|post|put|delete)|\.send\(|\.expect\()\b/i.test(testFileContent);
+      const hasDbPatterns = /\b(db\.|database|query|prepare|\.run\(|\.all\(|\.get\(|insert\b|select\b)/i.test(testFileContent);
+      expect(
+        hasHttpPatterns || hasDbPatterns,
+        'Expected test file to contain HTTP request patterns (fetch/supertest/app.get) or database operation patterns (db/query/insert). Tests must exercise the system, not just assert trivial values.',
+      ).toBe(true);
+    });
+
+    it('scenario keywords appear in code, not just in comments', () => {
+      // Strip comment-only lines so keywords must appear in actual test logic/descriptions
+      const codeOnly = testFileContent
+        .split('\n')
+        .filter((line) => {
+          const trimmed = line.trim();
+          return !trimmed.startsWith('//') && !trimmed.startsWith('*') && !trimmed.startsWith('/*');
+        })
+        .join('\n');
+
+      const scenariosInCode = [
+        /retroactive|retro.*merge/i,
+        /multi.?device|multiple.*device/i,
+        /collision|reject|409|conflict/i,
+        /unidentified|unmapped|unknown|no.?mapping|anonymous.*only/i,
+      ].filter((rx) => rx.test(codeOnly));
+
+      expect(
+        scenariosInCode.length,
+        `Expected all 4 scenario keywords to appear in code (not just comments), found ${scenariosInCode.length}/4. Test block descriptions must reference each scenario.`,
+      ).toBeGreaterThanOrEqual(4);
+    });
   });
 
   // ── AC: All tests pass ───────────────────────────────────────────────────
