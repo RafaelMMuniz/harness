@@ -36,7 +36,7 @@ MAX_AGENT_RETRIES=100             # Re-invoke agent if CLI exits non-zero
 MODEL_CODER="opus"
 MODEL_VALIDATOR="opus"
 BRANCH=$(git branch --show-current 2>/dev/null || echo "main")
-MONITOR_URL="https://minipanel-monitor-production.up.railway.app/api/iterations"
+MONITOR_URL=""  # Disabled locally — don't POST to the shared monitor while iterating on this branch
 
 # --- Parse arguments ---
 MODE="full"  # full | code-only | validate-only
@@ -411,27 +411,29 @@ while true; do
   git add VALIDATION_REPORT.md 2>/dev/null && git commit -m "[harness] iteration $ITERATION: $STORY_ID $([ "$ITER_PASSED" = true ] && echo PASS || echo FAIL)" 2>/dev/null || true
   do_git_push
 
-  # ── Monitor reporting ──────────────────────────────────────
-  ITER_DURATION=$(( $(date +%s) - ITER_START ))
-  INPUT_TOKENS=$(grep -oE 'input_tokens[": ]+[0-9]+' "$CODER_LOG" 2>/dev/null | grep -oE '[0-9]+' | tail -1)
-  OUTPUT_TOKENS=$(grep -oE 'output_tokens[": ]+[0-9]+' "$CODER_LOG" 2>/dev/null | grep -oE '[0-9]+' | tail -1)
-  CACHE_READ=$(grep -oE 'cache_read[": ]+[0-9]+' "$CODER_LOG" 2>/dev/null | grep -oE '[0-9]+' | tail -1)
+  # ── Monitor reporting (disabled when MONITOR_URL is empty) ─────
+  if [ -n "$MONITOR_URL" ]; then
+    ITER_DURATION=$(( $(date +%s) - ITER_START ))
+    INPUT_TOKENS=$(grep -oE 'input_tokens[": ]+[0-9]+' "$CODER_LOG" 2>/dev/null | grep -oE '[0-9]+' | tail -1)
+    OUTPUT_TOKENS=$(grep -oE 'output_tokens[": ]+[0-9]+' "$CODER_LOG" 2>/dev/null | grep -oE '[0-9]+' | tail -1)
+    CACHE_READ=$(grep -oE 'cache_read[": ]+[0-9]+' "$CODER_LOG" 2>/dev/null | grep -oE '[0-9]+' | tail -1)
 
-  curl -s --max-time 5 -X POST "$MONITOR_URL" \
-    -H 'Content-Type: application/json' \
-    -d "{
-      \"iteration\": $ITERATION,
-      \"max_iterations\": $MAX_ITERATIONS,
-      \"story_id\": \"${STORY_ID:-unknown}\",
-      \"story_title\": \"${STORY_TITLE:-unknown}\",
-      \"input_tokens\": ${INPUT_TOKENS:-0},
-      \"output_tokens\": ${OUTPUT_TOKENS:-0},
-      \"cache_read_tokens\": ${CACHE_READ:-0},
-      \"cache_write_tokens\": 0,
-      \"duration_seconds\": $ITER_DURATION,
-      \"passed\": $ITER_PASSED,
-      \"cost\": 0
-    }" > /dev/null 2>&1 || true
+    curl -s --max-time 5 -X POST "$MONITOR_URL" \
+      -H 'Content-Type: application/json' \
+      -d "{
+        \"iteration\": $ITERATION,
+        \"max_iterations\": $MAX_ITERATIONS,
+        \"story_id\": \"${STORY_ID:-unknown}\",
+        \"story_title\": \"${STORY_TITLE:-unknown}\",
+        \"input_tokens\": ${INPUT_TOKENS:-0},
+        \"output_tokens\": ${OUTPUT_TOKENS:-0},
+        \"cache_read_tokens\": ${CACHE_READ:-0},
+        \"cache_write_tokens\": 0,
+        \"duration_seconds\": $ITER_DURATION,
+        \"passed\": $ITER_PASSED,
+        \"cost\": 0
+      }" > /dev/null 2>&1 || true
+  fi
   # ──────────────────────────────────────────────────────────
 done
 
