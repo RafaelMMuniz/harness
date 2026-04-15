@@ -244,6 +244,78 @@ describe('US-002: Database schema', () => {
     });
   });
 
+  // ── Adversarial edge cases ───────────────────────────────────────────
+
+  describe('adversarial edge cases', () => {
+    it('device_id UNIQUE constraint has an index (not just inline UNIQUE keyword)', () => {
+      const indexes = db
+        .prepare("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='identity_mappings'")
+        .all() as { name: string }[];
+      // There should be at least one index on identity_mappings (the UNIQUE constraint creates one)
+      expect(indexes.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('events table accepts rows with empty-string device_id and user_id (not NULL)', () => {
+      const result = db.prepare(
+        "INSERT INTO events (event_name, device_id, user_id, timestamp, properties) VALUES ('edge-empty', '', '', '2024-01-01T00:00:00Z', NULL)"
+      ).run();
+      expect(result.changes).toBe(1);
+    });
+
+    it('properties column round-trips complex JSON with special characters', () => {
+      const complexJson = JSON.stringify({
+        query: "Robert'); DROP TABLE events;--",
+        nested: { arr: [1, 2, { deep: true }] },
+        unicode: '\u00e9\u00e0\u00fc\u{1f600}',
+        empty: '',
+        zero: 0,
+        nul: null,
+      });
+      db.prepare(
+        "INSERT INTO events (event_name, timestamp, properties) VALUES ('edge-json', '2024-06-15T12:00:00Z', ?)"
+      ).run(complexJson);
+
+      const row = db.prepare(
+        "SELECT properties FROM events WHERE event_name = 'edge-json'"
+      ).get() as { properties: string };
+      expect(JSON.parse(row.properties)).toEqual(JSON.parse(complexJson));
+    });
+
+    it('rejects identity_mappings with NULL device_id', () => {
+      expect(() => {
+        db.prepare(
+          "INSERT INTO identity_mappings (device_id, user_id, created_at) VALUES (NULL, 'user-x', '2024-01-01T00:00:00Z')"
+        ).run();
+      }).toThrow();
+    });
+
+    it('rejects identity_mappings with NULL user_id', () => {
+      expect(() => {
+        db.prepare(
+          "INSERT INTO identity_mappings (device_id, user_id, created_at) VALUES ('dev-null-uid', NULL, '2024-01-01T00:00:00Z')"
+        ).run();
+      }).toThrow();
+    });
+
+    it('rejects identity_mappings with NULL created_at', () => {
+      expect(() => {
+        db.prepare(
+          "INSERT INTO identity_mappings (device_id, user_id, created_at) VALUES ('dev-null-cat', 'user-x', NULL)"
+        ).run();
+      }).toThrow();
+    });
+
+    it('AUTOINCREMENT ids are monotonically increasing', () => {
+      const r1 = db.prepare(
+        "INSERT INTO events (event_name, timestamp) VALUES ('mono-1', '2024-01-01T00:00:00Z')"
+      ).run();
+      const r2 = db.prepare(
+        "INSERT INTO events (event_name, timestamp) VALUES ('mono-2', '2024-01-01T00:00:01Z')"
+      ).run();
+      expect(Number(r2.lastInsertRowid)).toBeGreaterThan(Number(r1.lastInsertRowid));
+    });
+  });
+
   // ── Idempotency ─────────────────────────────────────────────────────────
 
   describe('idempotency', () => {
