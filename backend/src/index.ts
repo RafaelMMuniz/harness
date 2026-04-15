@@ -1,5 +1,6 @@
 import express from 'express';
 import { initDb } from './db.js';
+import eventsRouter from './routes/events.js';
 
 const app = express();
 const PORT = 3001;
@@ -12,6 +13,8 @@ initDb();
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
+
+app.use('/api/events', eventsRouter);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
