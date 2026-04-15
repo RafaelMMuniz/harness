@@ -2,6 +2,9 @@ node_modules/
 .env
 .DS_Store
 harness/status.json
+harness/logs/
+test-results/
+playwright-report/
 CLAUDE.local.md
 *.db
 *.db-shm
