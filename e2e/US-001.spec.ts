@@ -1,139 +1,153 @@
 /**
  * US-001: Initialize project with monorepo structure
  *
- * Validates that the project scaffolding meets all acceptance criteria
- * from the spec. Tests are derived purely from prd.json AC — no source
- * code was read.
+ * Verifies the project scaffold: monorepo with Express+TS backend (port 3001)
+ * and React+Vite+Tailwind frontend (port 5173), both started by `npm run dev`.
  *
- * Structural checks use Node fs/child_process; runtime checks use
- * Playwright's request context (the webServer in playwright.config.ts
- * starts `npm run dev` before these tests run).
+ * Tests derived from prd.json acceptance criteria — not from implementation.
  */
-
 import { test, expect } from '@playwright/test';
-import { existsSync, readFileSync } from 'fs';
 import { execSync } from 'child_process';
-import path from 'path';
+import { existsSync } from 'fs';
+import { resolve } from 'path';
 
-const ROOT = path.resolve(__dirname, '..');
+const ROOT = resolve(__dirname, '..');
 
-// ---------- Structural checks ----------
+// ── Build-time / structural checks ──────────────────────────────────────────
 
 test.describe('US-001: Project structure', () => {
   test('root package.json has "npm run dev" script', () => {
-    const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf-8'));
-    expect(pkg.scripts).toBeDefined();
-    expect(pkg.scripts.dev).toBeDefined();
-    // Should start both backend and frontend
-    expect(typeof pkg.scripts.dev).toBe('string');
+    const pkg = JSON.parse(
+      execSync('cat package.json', { cwd: ROOT, encoding: 'utf-8' }),
+    );
+    expect(pkg.scripts).toHaveProperty('dev');
   });
 
-  test('server/ directory exists with TypeScript config', () => {
-    expect(existsSync(path.join(ROOT, 'server'))).toBe(true);
-    expect(existsSync(path.join(ROOT, 'server', 'tsconfig.json'))).toBe(true);
+  test('root npm install installs all workspace dependencies', () => {
+    // Verify that workspaces are configured so a single npm install works
+    const pkg = JSON.parse(
+      execSync('cat package.json', { cwd: ROOT, encoding: 'utf-8' }),
+    );
+    expect(pkg.workspaces).toEqual(expect.arrayContaining(['server', 'client']));
+
+    // node_modules should exist for both workspaces after install
+    expect(existsSync(resolve(ROOT, 'node_modules'))).toBe(true);
+    expect(existsSync(resolve(ROOT, 'server', 'package.json'))).toBe(true);
+    expect(existsSync(resolve(ROOT, 'client', 'package.json'))).toBe(true);
   });
 
-  test('client/ directory exists with TypeScript config', () => {
-    expect(existsSync(path.join(ROOT, 'client'))).toBe(true);
-    expect(existsSync(path.join(ROOT, 'client', 'tsconfig.json'))).toBe(true);
+  test('server/ directory uses Express + TypeScript', () => {
+    const serverPkg = JSON.parse(
+      execSync('cat server/package.json', { cwd: ROOT, encoding: 'utf-8' }),
+    );
+    const allDeps = {
+      ...(serverPkg.dependencies || {}),
+      ...(serverPkg.devDependencies || {}),
+    };
+    expect(allDeps).toHaveProperty('express');
+    expect(allDeps).toHaveProperty('typescript');
   });
 
-  test('server/ has a package.json (Express + Zod)', () => {
-    const serverPkgPath = path.join(ROOT, 'server', 'package.json');
-    expect(existsSync(serverPkgPath)).toBe(true);
-    const pkg = JSON.parse(readFileSync(serverPkgPath, 'utf-8'));
-    const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
-    expect(allDeps['express']).toBeDefined();
-    expect(allDeps['zod']).toBeDefined();
+  test('client/ directory uses React + Vite + TailwindCSS', () => {
+    const clientPkg = JSON.parse(
+      execSync('cat client/package.json', { cwd: ROOT, encoding: 'utf-8' }),
+    );
+    const allDeps = {
+      ...(clientPkg.dependencies || {}),
+      ...(clientPkg.devDependencies || {}),
+    };
+    expect(allDeps).toHaveProperty('react');
+    expect(allDeps).toHaveProperty('vite');
+    // Tailwind v4 uses @tailwindcss/vite, v3 uses tailwindcss — accept either
+    const hasTailwind =
+      'tailwindcss' in allDeps || '@tailwindcss/vite' in allDeps;
+    expect(hasTailwind).toBe(true);
   });
 
-  test('client/ has a package.json (React + Vite + TailwindCSS)', () => {
-    const clientPkgPath = path.join(ROOT, 'client', 'package.json');
-    expect(existsSync(clientPkgPath)).toBe(true);
-    const pkg = JSON.parse(readFileSync(clientPkgPath, 'utf-8'));
-    const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
-    expect(allDeps['react']).toBeDefined();
-    expect(allDeps['vite']).toBeDefined();
-    expect(
-      allDeps['tailwindcss'] || allDeps['@tailwindcss/vite'] || allDeps['@tailwindcss/postcss']
-    ).toBeDefined();
-  });
-
-  test('client/ has shadcn Button component available', () => {
-    // shadcn typically places components in src/components/ui/
-    const buttonPath = path.join(ROOT, 'client', 'src', 'components', 'ui', 'button.tsx');
+  test('shadcn UI initialized with Button component available', () => {
+    // The Button component file must exist in client
+    const buttonPath = resolve(ROOT, 'client', 'src', 'components', 'ui', 'button.tsx');
     expect(existsSync(buttonPath)).toBe(true);
   });
 
-  test('client/ has lucide-react as a dependency', () => {
-    const pkg = JSON.parse(
-      readFileSync(path.join(ROOT, 'client', 'package.json'), 'utf-8')
+  test('lucide-react is installed in client', () => {
+    const clientPkg = JSON.parse(
+      execSync('cat client/package.json', { cwd: ROOT, encoding: 'utf-8' }),
     );
-    const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
-    expect(allDeps['lucide-react']).toBeDefined();
+    const allDeps = {
+      ...(clientPkg.dependencies || {}),
+      ...(clientPkg.devDependencies || {}),
+    };
+    expect(allDeps).toHaveProperty('lucide-react');
   });
 
-  test('single npm install at root installs all deps (workspaces)', () => {
-    const rootPkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf-8'));
-    // Must have workspaces that include server and client
-    expect(rootPkg.workspaces).toBeDefined();
-    expect(Array.isArray(rootPkg.workspaces)).toBe(true);
-    const ws = rootPkg.workspaces as string[];
-    expect(ws.some((w: string) => w === 'server' || w.includes('server'))).toBe(true);
-    expect(ws.some((w: string) => w === 'client' || w.includes('client'))).toBe(true);
+  test('zod is installed in server', () => {
+    const serverPkg = JSON.parse(
+      execSync('cat server/package.json', { cwd: ROOT, encoding: 'utf-8' }),
+    );
+    const allDeps = {
+      ...(serverPkg.dependencies || {}),
+      ...(serverPkg.devDependencies || {}),
+    };
+    expect(allDeps).toHaveProperty('zod');
   });
 
-  test('README.md documents the start command', () => {
-    const readmePath = path.join(ROOT, 'README.md');
-    expect(existsSync(readmePath)).toBe(true);
-    const content = readFileSync(readmePath, 'utf-8');
-    expect(content).toContain('npm install');
-    expect(content).toContain('npm run dev');
+  test('README.md documents npm install && npm run dev', () => {
+    const readme = execSync('cat README.md', { cwd: ROOT, encoding: 'utf-8' });
+    expect(readme).toMatch(/npm install/i);
+    expect(readme).toMatch(/npm run dev/i);
   });
 
   test('typecheck passes for both server and client', () => {
     // This will throw if typecheck fails
-    execSync('npm run typecheck', { cwd: ROOT, timeout: 60000, stdio: 'pipe' });
+    execSync('npm run typecheck', {
+      cwd: ROOT,
+      encoding: 'utf-8',
+      timeout: 60_000,
+    });
   });
 
-  test('Playwright config is valid (npx playwright test --list succeeds)', () => {
-    // --list just lists tests without running them — verifies config is parseable
-    execSync('npx playwright test --list', { cwd: ROOT, timeout: 30000, stdio: 'pipe' });
+  test('playwright config is valid (npx playwright test --list succeeds)', () => {
+    const output = execSync('npx playwright test --list', {
+      cwd: ROOT,
+      encoding: 'utf-8',
+      timeout: 30_000,
+    });
+    // --list should print test names without error
+    expect(output).toBeTruthy();
   });
 });
 
-// ---------- Runtime checks ----------
+// ── Runtime checks (require dev servers running) ────────────────────────────
+// Playwright's webServer config starts `npm run dev` before these tests run.
 
-test.describe('US-001: Dev servers running', () => {
-  test('frontend loads on port 5173', async ({ page }) => {
-    const response = await page.goto('/');
-    expect(response).not.toBeNull();
-    expect(response!.status()).toBeLessThan(400);
+test.describe('US-001: Runtime — backend', () => {
+  test('backend responds on port 3001', async ({ request }) => {
+    // Direct request to the backend port — any 2xx or known route is fine
+    const res = await request.get('http://localhost:3001/');
+    // Accept 200, 404 (route not found but server is up), or any non-5xx
+    expect(res.status()).toBeLessThan(500);
+  });
+});
+
+test.describe('US-001: Runtime — frontend', () => {
+  test('frontend loads in browser on port 5173', async ({ page }) => {
+    await page.goto('/');
+    // The page should load without error and have some content
+    await expect(page.locator('body')).not.toBeEmpty();
   });
 
-  test('backend API responds on port 3001', async ({ request }) => {
-    // A minimal Express server should return something on the root or a health endpoint
-    // We accept any response that isn't a connection error
-    const response = await request.get('http://localhost:3001/', { timeout: 5000 });
-    // Even a 404 is fine — it means the server is running
-    expect(response.status()).toBeLessThan(500);
-  });
-
-  test('frontend proxies API requests to backend', async ({ request }) => {
-    // Requests to /api/* through the frontend (port 5173) should be proxied to backend (port 3001)
-    // We expect the proxy to forward and return *something* — even a 404 from Express, not a Vite error page
-    const response = await request.get('/api/health', { timeout: 5000 });
-    // A properly proxied request returns JSON or a small status response, not a full HTML page
-    // If Vite serves its own 404 HTML, the proxy isn't working
-    const status = response.status();
-    // Accept any status — the key is the request reached the backend, not Vite's fallback
-    // We verify by checking content-type isn't text/html (which would be Vite's SPA fallback)
-    if (status === 404) {
-      const contentType = response.headers()['content-type'] || '';
-      // Express 404 returns text/html but it's a tiny error page, not a full SPA
-      // Vite SPA fallback returns the full index.html. We check body size as a heuristic.
-      const body = await response.text();
-      expect(body.length).toBeLessThan(5000); // Express error pages are small; Vite index.html is larger
-    }
+  test('vite proxy forwards /api requests to backend', async ({ request }) => {
+    // A request through the Vite proxy should reach the Express backend.
+    // The exact route doesn't matter yet (US-001 is scaffold only),
+    // but the proxy itself should be wired up — a 404 from Express is fine,
+    // a connection error or Vite HTML fallback is not.
+    const res = await request.get('/api/health');
+    // If proxy is working, we get a JSON or text response from Express.
+    // If proxy is broken, we'd get Vite's HTML index page or a connection error.
+    const contentType = res.headers()['content-type'] || '';
+    // The response should NOT be HTML (that would mean Vite served its SPA fallback
+    // instead of proxying to Express)
+    expect(contentType).not.toMatch(/text\/html/);
   });
 });
