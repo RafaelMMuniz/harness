@@ -1,10 +1,10 @@
 # Review Report
 
-## Story: US-001 — Initialize project with monorepo structure
+## Story: US-002 — Set up SQLite database with connection and schema management
 
-## Iteration: 2
+## Iteration: 4
 
-## Reviewed commit: e9d2b3b [coder] fix: US-001 — add typescript to server/package.json devDependencies
+## Reviewed commit: b51bc6e [coder] impl: US-002 — SQLite database with schema initialization
 
 ## Findings
 
@@ -15,6 +15,6 @@
 ### MEDIUM (0)
 
 ### LOW (1)
-- [package-lock.json] Lock file diff removed 11 `lightningcss-*` platform-specific optional dependencies. Likely a side-effect of `npm install` normalizing for the current OS/arch rather than an intentional change. No functional impact, but the lock file is now less portable to other platforms (CI, teammates on Linux). Worth a `npm install` on CI to regenerate if cross-platform builds matter.
+- [server/src/db.ts:4] `path.resolve('minipanel.db')` resolves relative to `process.cwd()`, not the module location. If the server is ever started from a working directory other than the project root, the DB file will be created in the wrong location. Consider anchoring to `import.meta.url` or `__dirname`. Minor risk since start scripts control the cwd.
 
-## No findings in: Unsafe SQL, Input validation, Identity resolution, Unhandled promise rejections, `any` types, Dead code, Convention violations, Scope creep, Error handling, Logging
+## No findings in: Unsafe SQL, Input validation, Identity resolution, Unhandled promise rejection, `any` types, Dead code, Convention violations, Scope creep, Error-handling shortcuts, Logging
