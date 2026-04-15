@@ -19,6 +19,14 @@
 
 ## Decisions
 
+### Iteration 2 (2026-04-15) — US-002 SQLite database
+
+- **better-sqlite3 (synchronous API)**: Per spec recommendation. Simpler than async sqlite3 for this use case.
+- **DB path**: `minipanel.db` in project root via `path.resolve(import.meta.dirname, '../../minipanel.db')` from `server/src/db.ts`.
+- **WAL mode**: Enabled for better concurrent read performance.
+- **Exported `getDb()` + `initializeDatabase()`**: `getDb()` lazy-creates the connection; `initializeDatabase()` called at server startup creates tables if not exist.
+- **`*.db` already gitignored** from iteration 1.
+
 ### Iteration 1 (2026-04-15) — US-001 scaffold
 
 - **`server/` + `client/` instead of `backend/` + `frontend/`**: Acceptance criteria explicitly require these directory names. Updated root package.json workspaces accordingly.

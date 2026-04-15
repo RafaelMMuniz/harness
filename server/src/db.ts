@@ -1,0 +1,40 @@
+import Database from 'better-sqlite3';
+import path from 'node:path';
+
+const DB_PATH = path.resolve(import.meta.dirname, '../../minipanel.db');
+
+let db: Database.Database;
+
+export function getDb(): Database.Database {
+  if (!db) {
+    db = new Database(DB_PATH);
+    db.pragma('journal_mode = WAL');
+  }
+  return db;
+}
+
+export function initializeDatabase(): void {
+  const database = getDb();
+
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      event_name TEXT NOT NULL,
+      device_id TEXT,
+      user_id TEXT,
+      timestamp TEXT NOT NULL,
+      properties TEXT
+    )
+  `);
+
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS identity_mappings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      device_id TEXT NOT NULL UNIQUE,
+      user_id TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )
+  `);
+
+  console.log('Database initialized successfully');
+}
