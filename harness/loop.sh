@@ -287,8 +287,11 @@ while true; do
     continue
   fi
 
-  check_verdict
-  verdict=$?
+  # Capture verdict without tripping set -e (check_verdict intentionally
+  # returns 1 on FAIL and 2 on DONE — both are non-zero "errors" that would
+  # otherwise kill the loop before we can act on them).
+  verdict=0
+  check_verdict || verdict=$?
 
   case $verdict in
     0)  # PASS
@@ -362,8 +365,10 @@ while true; do
     }" > /dev/null 2>&1 || true
   # ──────────────────────────────────────────────────────────
 
-  # Break after reporting if DONE
-  [ "$verdict" -eq 2 ] 2>/dev/null && break
+  # Break after reporting if DONE (verdict==2)
+  if [ "$verdict" -eq 2 ]; then
+    break
+  fi
 done
 
 log ""
