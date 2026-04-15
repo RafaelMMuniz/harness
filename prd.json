@@ -317,7 +317,7 @@
         "All Playwright event API tests pass: npx playwright test api-events.spec.ts (single + batch tests)"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": "This is essential for the sample data seeder (US-008) to run fast. Wrap the whole insert loop in a transaction."
     },
     {
