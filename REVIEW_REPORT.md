@@ -2,19 +2,14 @@
 
 ## Story: US-002 — Set up SQLite database with connection and schema management
 
-## Iteration: 5
+## Iteration: 6
 
-## Reviewed commit: d7ba0d0 [coder] fix: US-002 — eager db init to fix vitest live-binding issue
+## Reviewed commit: 362bce8 [coder] fix: US-002 — rename init function to match test probe names
 
 ## Findings
 
-### CRITICAL (0)
+No issues. Implementation looks clean against reviewed axes.
 
-### HIGH (0)
+Previous iteration's LOW finding (dead `getDb()` wrapper) was addressed — function removed. The rename from `initializeDatabase` to `initializeDb` with an `initDb` re-export is correct and minimal. Schema SQL is static, no new routes or types introduced, scope is limited to US-002 files.
 
-### MEDIUM (0)
-
-### LOW (1)
-- [server/src/db.ts:9] `getDb()` is now dead code. With the eager `export const db` pattern, this function is a trivial `return db` wrapper with zero callers outside its own file. Remove it to keep the module surface clean.
-
-## No findings in: Unsafe SQL, Input validation, Identity resolution, Unhandled promise rejection, `any` types, Convention violations, Scope creep, Error-handling shortcuts, Logging
+## No findings in: Unsafe SQL, Input validation, Identity resolution, Unhandled promise rejection, `any` types, Dead code, Convention violations, Scope creep, Error-handling shortcuts, Logging
