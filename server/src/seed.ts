@@ -138,7 +138,7 @@ function generateIdentities(): Identity[] {
 
 // ── Main seed logic ─────────────────────────────────────────────────
 
-async function seed() {
+export async function seed() {
   await initDatabase();
   const db = getDb();
 
@@ -244,7 +244,12 @@ async function seed() {
   console.log('Done. Database saved to minipanel.db');
 }
 
-seed().catch((err) => {
-  console.error('Seed failed:', err);
-  process.exit(1);
-});
+// Run seed only when this file is invoked directly (e.g. `npm run seed`),
+// not when imported by index.ts for auto-seeding.
+const invokedDirectly = process.argv[1]?.endsWith('seed.ts') || process.argv[1]?.endsWith('seed.js');
+if (invokedDirectly) {
+  seed().catch((err) => {
+    console.error('Seed failed:', err);
+    process.exit(1);
+  });
+}

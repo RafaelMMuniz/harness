@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { initDatabase, getDb, flushSave, saveDb } from './db.js';
+import { seed } from './seed.js';
 import eventsRouter from './routes/events.js';
 import queriesRouter, { overviewHandler } from './routes/queries.js';
 import usersRouter from './routes/users.js';
@@ -59,6 +60,18 @@ app.post('/api/test/reset', (_req, res) => {
 
 async function main() {
   await initDatabase();
+
+  // Auto-seed on empty DB so a fresh clone shows data immediately.
+  // Also makes the app usable without remembering to run `npm run seed` first.
+  const db = getDb();
+  const countResult = db.exec('SELECT COUNT(*) FROM events');
+  const eventCount = (countResult[0]?.values[0][0] as number) ?? 0;
+  if (eventCount === 0) {
+    console.log('Empty database detected — seeding sample data (one-time setup)...');
+    await seed();
+    console.log('Auto-seed complete.');
+  }
+
   app.listen(PORT, () => {
     console.log(`MiniPanel server running on port ${PORT}`);
   });
