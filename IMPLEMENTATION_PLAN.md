@@ -15,13 +15,15 @@
 
 ## Known Issues
 
-- ~~**2026-04-15 — AC directory names vs existing scaffolding**~~ Resolved — see Decisions iter 4 below.
+(none)
 
 ## Decisions
 
-- **2026-04-15 (iter 1) — Tailwind v4 + shadcn/ui manual setup:** Used Tailwind CSS v4 with `@tailwindcss/vite` plugin and manual shadcn/ui component scaffolding (Button). CSS vars use hex values aligned with MiniPanel design system neutral palette. Added `overrides.vite: "^6.0.0"` in root package.json to prevent npm hoisting Vite 5 alongside Vite 6 (which caused TypeScript Plugin type conflicts).
-- **2026-04-15 (iter 2) — SQLite via better-sqlite3:** Used `better-sqlite3` (synchronous API) per spec notes. DB file at project root (`minipanel.db`), WAL mode enabled. Schema init is idempotent (`CREATE TABLE IF NOT EXISTS`). `db.ts` exports `initDb()` (called once at startup) and `getDb()` for subsequent use. UNIQUE constraint on `identity_mappings.device_id` enforces one-device-to-one-user rule.
-- **2026-04-15 (iter 3) — DB_PATH fix:** Changed `DB_PATH` from `process.cwd()`-relative to `import.meta.url`-relative (two levels up from `server/src/`). The `process.cwd()` approach broke when vitest ran from the `server/` workspace directory, placing the DB at `server/minipanel.db` instead of the project root. Also exported `DB_PATH` from `db.ts` so consumers can reference the canonical path.
-- **2026-04-15 (iter 4) — Directory rename server→backend, client→frontend:** The test harness and root package.json workspaces expected `backend/` and `frontend/`, but the coder had created `server/` and `client/` based on an ambiguous AC reading. Renamed directories and updated all workspace references (`package.json` names, root workspace list, scripts). Tests now pass 9/9. Resolves the directory name mismatch known issue.
-- **2026-04-15 (iter 5) — US-003 event ingestion endpoint:** Created `backend/src/routes/events.ts` with POST /api/events. Zod validation enforces: event name required+non-empty, at least one of device_id/user_id. Timestamp defaults to UTC ISO 8601. Properties serialized to JSON. Identity conflict check (409) runs BEFORE event insertion. INSERT OR IGNORE for identity mapping creation. Returns 201 with full stored event object including generated id.
+### Iteration 1 (2026-04-15) — US-001 scaffold
+
+- **`server/` + `client/` instead of `backend/` + `frontend/`**: Acceptance criteria explicitly require these directory names. Updated root package.json workspaces accordingly.
+- **Tailwind CSS v4 with `@tailwindcss/vite` plugin**: No separate tailwind.config needed. Theme customization via CSS `@theme` directive.
+- **shadcn/ui manual setup**: Created `components.json`, `lib/utils.ts`, and Button component manually rather than using `npx shadcn init` to avoid workspace path issues.
+- **Express v4 + tsx for dev**: Using `tsx watch` for hot-reload during development. Zod installed as runtime dependency per spec.
+- **TypeScript 6**: Removed deprecated `baseUrl` from client tsconfig; `paths` work without it in TS6+.
 

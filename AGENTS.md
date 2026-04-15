@@ -1,34 +1,32 @@
 ## Build & Run
 
 ```bash
-npm install          # installs all workspace dependencies (backend + frontend)
-npm run dev          # starts both backend (port 3001) and frontend (port 5173) via concurrently
-npm run typecheck    # typechecks both backend and frontend
-npm run build        # builds both backend and frontend
+npm install            # installs root + server + client via workspaces
+npm run dev            # starts server (port 3001) + client (port 5173) concurrently
+npm run typecheck      # typechecks server then client
+npm run build          # builds server (tsc) then client (vite build)
 ```
 
-### Workspaces
-
-- `backend/` — Express.js + TypeScript backend. Dev: `tsx watch`. Typecheck: `tsc --noEmit`.
-- `frontend/` — React + Vite + TypeScript + Tailwind v4 + shadcn/ui frontend. Dev: `vite`. Typecheck: `tsc -b`.
-
-### Ports
-
-- Backend: 3001
-- Frontend: 5173 (proxies `/api/*` to backend)
+- Server dev: `tsx watch src/index.ts` (hot-reload)
+- Client dev: `vite` with proxy `/api` → `localhost:3001`
+- Workspaces: `server` and `client` (NOT `backend`/`frontend`)
 
 ## Validation
 
-(Not yet set up — validator iteration 1 will populate this)
+```bash
+npx playwright test --list    # verify Playwright config
+npx playwright test           # run E2E tests (needs dev servers running)
+```
 
 ## Operational Notes
 
-- Root `overrides.vite: "^6.0.0"` is required to prevent Vite 5/6 type conflicts in npm workspace hoisting.
-- TypeScript 6 deprecates `baseUrl` in tsconfig. Frontend uses `paths` without `baseUrl` (supported since TS 5.0).
-- After changing root package.json workspaces or overrides, delete `node_modules/` and `package-lock.json` and reinstall.
+- TypeScript 6 deprecates `baseUrl` — use `paths` without it
+- Tailwind CSS v4 uses `@tailwindcss/vite` plugin, no separate config file
+- shadcn components live in `client/src/components/ui/`
 
 ### Codebase Patterns
 
-- shadcn/ui components in `frontend/src/components/ui/`. Config in `frontend/components.json`.
-- Path alias `@/` maps to `frontend/src/` (via Vite `resolve.alias` and tsconfig `paths`).
-- CSS vars for design tokens in `frontend/src/index.css`. Font stack: system monospace.
+- Server entry: `server/src/index.ts`
+- Client entry: `client/src/main.tsx`
+- Path alias: `@/` → `client/src/`
+- CSS utility: `cn()` from `@/lib/utils`
