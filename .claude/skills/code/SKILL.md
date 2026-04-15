@@ -50,54 +50,41 @@ After completing each implementation story, run the Playwright test command spec
 
 Then apply the priority rules:
 
-1. **If VALIDATION_REPORT.md shows FAIL**: Top priority is fixing the failures. Each failure includes the test name, what was expected, what happened, and severity. Fix in order CRITICAL > HIGH > MEDIUM > LOW. Do NOT move to new stories until CRITICAL and HIGH failures are resolved.
+1. **If VALIDATION_REPORT.md shows FAIL**: Top priority is fixing the failures. Each failure includes the test name, what was expected, what happened, and severity. Fix in order CRITICAL > HIGH > MEDIUM > LOW. Fix as many as you can before exiting. Do NOT start new stories until all CRITICAL and HIGH failures are resolved.
 
-2. **If VALIDATION_REPORT.md shows PASS or NOT YET RUN**: Pick **exactly ONE** story from `prd.json` where `passes: false`, using the LOWEST `priority` number (negative priorities first — those are Phase 1 E2E tests). Implement that one story completely and STOP.
+2. **If VALIDATION_REPORT.md shows PASS or NOT YET RUN**: Attempt to complete the ENTIRE project in this iteration. Work through every `prd.json` story with `passes: false` in priority order (most negative first — Phase 1 E2E tests — then priority 1, 2, 3, …). For each story: implement all acceptance criteria, run the relevant tests/typecheck to confirm it works, flip `passes: true` in prd.json, move on. Only stop when either (a) every story passes, or (b) you hit a genuine blocker you can't resolve in this invocation.
 
-3. **If every `prd.json` story has `passes: true`**: Run the full test suite to confirm. If all pass, commit any pending notes and exit — the validator will set verdict to DONE. If tests fail despite `passes: true`, the prior coder lied — flip the lying stories back to `passes: false`, then pick the first failing story to fix.
+3. **If every `prd.json` story has `passes: true`**: Run the full test suite to confirm. If everything passes, commit any pending notes and exit — the validator will set verdict to DONE. If tests fail despite `passes: true`, the prior coder lied — flip the lying stories back to `passes: false` and fix them in this same invocation.
 
-## One Story Per Iteration — The Iron Rule
+## Iterations are course-correction, not micro-steps
 
-**You work on exactly ONE prd.json story per invocation. Then you commit and exit.**
+The harness loop is for course-correction after the validator finds real bugs — not for spoon-feeding you one story at a time. Build as much of the project as you can in a single invocation. The validator will catch what's broken. The next iteration (if needed) fixes those specific issues. A good run looks like:
 
-This is the most important rule in this skill. The harness derives its value from the feedback loop between coder and validator. If you implement 10 stories in one iteration, the validator faces a 10-story review and any bug gets buried in a giant diff. Worse: you've burned iterations worth of budget on one shot, leaving no room for course correction.
+- Iteration 1: coder builds the whole project end-to-end, commits with many stories flipped to `passes: true`.
+- Iteration 2: validator found 5 CRITICAL failures. Coder fixes all 5, commits.
+- Iteration 3: validator finds 1 MEDIUM issue. Coder fixes it, commits.
+- Iteration 4: everything green. Validator sets verdict to DONE. Loop exits.
 
-### What "ONE story" means:
-- ONE item from `prd.json.userStories` with `passes: false`. Use the lowest `priority` number first (negative priorities = Phase 1 E2E tests, run FIRST; priority 1+ = Phase 2 implementation).
-- Complete ALL acceptance criteria for that story — not "implement it somewhat." Finish the story fully.
-- Related work that is clearly part of the same story (e.g., adding a config file for the same framework) is fine. Pulling in the next story because "it's easy" or "I have context" is forbidden.
+This is the opposite of "ralph one-story-per-iteration" for a reason: the validator is adversarial and thorough, so it will find anything missed. You maximize throughput by attempting maximum work per iteration. The only things that slow you down are (a) genuine blockers, (b) running out of context (rare with opus).
 
-### What "commit and exit" means:
-- After the story is done, run its tests/typecheck to confirm it works in isolation.
-- **Update `prd.json`**: set `passes: true` on that one story. This is the only status bookkeeping you do — IMPLEMENTATION_PLAN.md tracks no status.
-- If you discovered a cross-cutting bug (one that doesn't map to your story), append a bullet under `## Known Issues` in IMPLEMENTATION_PLAN.md, prefixed with iteration number. If you made a significant architectural choice (e.g., chose a specific library), append under `## Decisions` with rationale. Do NOT put story status there.
-- `git add -A && git commit -m "[coder] US-XXX: brief description"`.
-- Return a short summary (1-3 sentences) and exit. Do NOT start another story.
+### Committing and exiting
 
-### Exception: fixing validation failures
-When VALIDATION_REPORT.md shows FAIL, rule 1 applies. You may fix multiple CRITICAL/HIGH failures in one iteration if they're clearly related (e.g., all caused by the same bug) — but prefer focused commits. The one-story rule is about NEW work, not about fix batches.
+- **Update `prd.json`**: set `passes: true` on every story you completed. This is the only status bookkeeping you do — IMPLEMENTATION_PLAN.md tracks no status.
+- If you discovered cross-cutting bugs (that don't map to a single story), append bullets under `## Known Issues` in IMPLEMENTATION_PLAN.md, prefixed with iteration number. Same for `## Decisions` (architectural choices).
+- Single commit at the end: `git add -A && git commit -m "[coder] <what you did>"`. For broad iterations: `"[coder] Phase 1 + Phase 2 bootstrap: US-T00..US-T08, US-001..US-005"`. For fix iterations: `"[coder] fix validation: 5 CRITICAL resolved"`.
+- Return a short summary (3-5 sentences covering: what was attempted, what passes, what's still broken, what blocked you if anything) and exit.
 
-### Exception: Phase 1 batching
+### When NOT to keep going
+- You hit a blocker that genuinely needs outside info (e.g., ambiguous spec, missing credentials, tool unavailable).
+- You're running low on remaining context budget and starting new work risks leaving things half-done.
+- A validation failure is inscrutable and needs the validator to re-verify with fresh tests before you can act.
 
-Phase 1 stories (negative priority — US-T00 through US-T08) are **test-authoring only**. They create Playwright spec files that cannot execute until Phase 2 bootstraps the backend and frontend. Validating them one-at-a-time is pure waste: the validator can only re-run `tsc --noEmit -p tsconfig.e2e.json` and `playwright test --list` — identical checks every time.
-
-**Rule for Phase 1:** in a single iteration, work through every Phase 1 story with `passes: false` in priority order (most negative first). For each story:
-1. Write its spec files per acceptance criteria.
-2. Run `tsc --noEmit -p tsconfig.e2e.json` and `playwright test --list` to confirm the files compile.
-3. Mark `passes: true` in prd.json for that story.
-4. Continue to the next Phase 1 story.
-
-At the end of the iteration, commit once with a message like `[coder] Phase 1 test-authoring: US-T00..US-T08` (list the range or exact IDs you completed).
-
-The Iron Rule of one-story-per-iteration resumes the moment ANY priority ≥ 1 story is in play. Do NOT use this batching for Phase 2 — those stories have real dependencies and real runtime behavior; per-story validation matters there.
-
-### The psychological trap
-You will be tempted to "just keep going" after finishing one story because you have context, the code is fresh, and it feels efficient. **Resist this.** The harness will invoke you again with equally rich context thanks to your logs and updated plan files. Each iteration is a natural checkpoint. Fight the urge to ship a mega-commit.
+In those cases: commit what's done, document the blocker in IMPLEMENTATION_PLAN.md → Known Issues, exit. The next iteration picks up from committed state.
 
 ## Implementation Rules
 
 - **Follow the design system for all frontend work.** Before writing any UI code — components, pages, layouts, charts, styling — read `.claude/skills/minipanel-design/SKILL.md` and load the specific reference file you need from `.claude/skills/minipanel-design/references/` (design tokens, component patterns, or page layouts). Do not invent colors, typography, spacing, or component styles. Use the design skill as the source of truth for all visual decisions.
-- **Complete the current story.** The story you're working on must be fully implemented — every function works, every endpoint returns real data, every UI component renders and is interactive. "Complete" means "this story's acceptance criteria are all met." It does NOT mean "finish the whole project in one go." Remember the Iron Rule above.
+- **Complete every story you touch.** Don't half-finish: every function works, every endpoint returns real data, every UI component renders and is interactive. Before flipping a story's `passes: true`, verify all its acceptance criteria are met. Leave broken stories at `passes: false` and document the blocker.
 - **Identity resolution is sacred.** Every query that touches user identity MUST go through the resolution layer. If you find yourself writing `WHERE user_id = ?` without considering device mappings, stop and fix it. Re-read the acceptance criteria on stories US-005 and US-006 (identity resolution + tests) in prd.json until you can recite the merge rules.
 - **Use subagents for parallelism**: Up to 200 parallel Sonnet subagents for file reads and code searches. 1 Sonnet subagent for builds and test runs (sequential filesystem access). Opus subagent for complex debugging or architectural reasoning.
 - **Verify before committing**: Run the typecheck and any existing tests. If tests fail, fix them. If tests unrelated to your work fail, fix them too — the codebase must always be green.
@@ -117,9 +104,12 @@ You will be tempted to "just keep going" after finishing one story because you h
 
 ## Git Protocol
 
-After completing a unit of work (one requirement, or a batch of validation fixes):
+One commit per invocation, at the end:
 1. `git add -A`
-2. `git commit` with a descriptive message: `[coder] BR-XXX: brief description` or `[coder] fix: description of validation fix`
+2. `git commit` with a descriptive message summarizing the iteration. Examples:
+   - Broad build iteration: `[coder] Bootstrap + Phase 1 + Phase 2 stories US-T00..US-T08, US-001..US-012`
+   - Fix iteration: `[coder] fix validation: 4 CRITICAL, 2 HIGH resolved`
+   - Single story follow-up: `[coder] US-023: funnel analysis backend + UI`
 3. Do NOT push. The harness handles pushing.
 
 ## Error Recovery
@@ -133,7 +123,7 @@ If you encounter a problem you cannot solve:
 
 99. When you learn operational knowledge (correct commands, patterns, gotchas), update AGENTS.md.
 999. Keep IMPLEMENTATION_PLAN.md current. Future-you and the validator depend on it.
-9999. Implement the CURRENT story completely — no stubs, no TODOs, no "will implement later". But also: do NOT pull in the next story. Stop when your one story is done.
+9999. Implement every story you flip to `passes: true` completely — no stubs, no TODOs, no "will implement later". Partial implementations that claim to pass are worse than incomplete ones that honestly don't — they poison the validator's trust.
 99999. If VALIDATION_REPORT.md identifies a bug in your implementation, the validator is probably right. Fix the code, don't argue with the test. The escape hatch: if you genuinely believe the test misreads the spec, note your reasoning in IMPLEMENTATION_PLAN.md under "Known Issues" with spec citations.
 999999. When IMPLEMENTATION_PLAN.md grows large, clean out completed items periodically — keep only the last few completions for context, move the rest to a "History" section or remove them.
 9999999. If you find inconsistencies in the specs, note them in IMPLEMENTATION_PLAN.md and make a judgment call. Prefer the interpretation that better serves the users described in prd.json.
