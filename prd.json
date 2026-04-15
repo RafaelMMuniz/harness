@@ -277,7 +277,7 @@
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Use better-sqlite3 for simplicity (synchronous API, no native build issues on most systems). Store properties as a JSON string. The UNIQUE constraint on device_id in the identity_mappings table enforces the one-device-to-one-user rule."
     },
     {
