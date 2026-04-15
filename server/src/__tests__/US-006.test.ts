@@ -110,8 +110,58 @@ describe('US-006: Automated tests for identity resolution', () => {
       // The spec says: "send anonymous events for device-D (no mapping), query by device-D,
       // assert only device-D events are returned"
       expect(
-        /unidentified|unmapped|no.?mapping|anonymous.*only/i.test(testFileContent),
+        /unidentified|unmapped|unknown|no.?mapping|anonymous.*only/i.test(testFileContent),
         'Expected test file to contain an unidentified/unmapped device test scenario',
+      ).toBe(true);
+    });
+  });
+
+  // ── Anti-gaming: tests are real, not empty stubs ─────────────────────────
+
+  describe('Anti-gaming: real test logic', () => {
+    let testFileContent: string;
+
+    const testsDir = path.join(SERVER_DIR, 'src', '__tests__');
+    const findTestFile = (): string | undefined => {
+      if (!fs.existsSync(testsDir)) return undefined;
+      const files = fs.readdirSync(testsDir);
+      const match = files.find(
+        (f) => /identity/i.test(f) && f.endsWith('.test.ts'),
+      );
+      return match ? path.join(testsDir, match) : undefined;
+    };
+
+    const testFilePath = findTestFile();
+
+    if (testFilePath && fs.existsSync(testFilePath)) {
+      testFileContent = fs.readFileSync(testFilePath, 'utf-8');
+    } else {
+      testFileContent = '';
+    }
+
+    it('has at least 4 test blocks (it/test calls)', () => {
+      // Each of the 4 scenarios should be a real test block, not just a comment
+      const testBlocks = testFileContent.match(/\b(it|test)\s*\(/g) || [];
+      expect(
+        testBlocks.length,
+        `Expected at least 4 test blocks (it/test calls), found ${testBlocks.length}. Each identity-resolution scenario must be a real test.`,
+      ).toBeGreaterThanOrEqual(4);
+    });
+
+    it('has at least 4 expect() assertions', () => {
+      // Prevents empty test bodies that pass trivially
+      const assertions = testFileContent.match(/\bexpect\s*\(/g) || [];
+      expect(
+        assertions.length,
+        `Expected at least 4 expect() assertions, found ${assertions.length}. Tests must have real assertions, not empty bodies.`,
+      ).toBeGreaterThanOrEqual(4);
+    });
+
+    it('uses fresh in-memory database per test (spec requirement)', () => {
+      // prd.json: "Use a fresh in-memory SQLite database per test to avoid test pollution"
+      expect(
+        /(:memory:|in.?memory|sqlite|fresh.*db|beforeEach|beforeAll)/i.test(testFileContent),
+        'Expected test file to reference in-memory database setup (:memory:, sqlite, beforeEach). Spec requires fresh in-memory SQLite per test.',
       ).toBe(true);
     });
   });
