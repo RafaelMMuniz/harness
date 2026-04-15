@@ -26,3 +26,7 @@ Removed `baseUrl` from `client/tsconfig.app.json`; `paths` resolves relative to 
 Using Tailwind v3 (classic PostCSS setup) rather than v4 to ensure full shadcn/ui component compatibility.
 Design tokens (monospace font stack) configured in `client/tailwind.config.ts`.
 
+### [iter-3] 2026-04-15 — typescript missing from server/package.json
+Test expected `typescript` in server's combined deps (dependencies + devDependencies).
+It was only in the root package.json. Added `typescript: ^6.0.2` to `server/devDependencies`.
+
