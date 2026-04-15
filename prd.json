@@ -60,7 +60,7 @@
         "git commit with message 'test: add API contract tests for events, queries, and users'"
       ],
       "priority": -9,
-      "passes": false,
+      "passes": true,
       "notes": "Tests seed their own data using createEvent() and createBatchEvents() helpers in beforeAll hooks. Each test file should create fresh data with unique identifiers to avoid cross-test interference. API tests use the Playwright request fixture directly — no browser needed."
     },
     {
@@ -78,7 +78,7 @@
         "git commit with message 'test: add identity resolution E2E tests (BR-101 scenarios)'"
       ],
       "priority": -8,
-      "passes": false,
+      "passes": true,
       "notes": "Use unique test- prefixed IDs in each test to avoid collisions with other test files. Each test should be independent — seed its own data in beforeEach or at the start of the test. These tests mirror the 'How to verify' section from the business requirements."
     },
     {
