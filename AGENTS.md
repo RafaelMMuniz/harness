@@ -1,32 +1,31 @@
 ## Build & Run
 
 ```bash
-npm install            # installs root + server + client via workspaces
-npm run dev            # starts server (port 3001) + client (port 5173) concurrently
-npm run typecheck      # typechecks server then client
-npm run build          # builds server (tsc) then client (vite build)
+npm install          # installs all workspace deps (root + server + client)
+npm run dev          # starts Express (3001) + Vite (5173) via concurrently
+npm run typecheck    # tsc for both server and client
+npm run build        # compile server + build client
 ```
 
-- Server dev: `tsx watch src/index.ts` (hot-reload)
-- Client dev: `vite` with proxy `/api` → `localhost:3001`
-- Workspaces: `server` and `client` (NOT `backend`/`frontend`)
+- Server dev: `tsx watch` (no compile step, runs TypeScript directly)
+- Client dev: Vite with React plugin, proxies `/api` to `localhost:3001`
+- TypeScript 6 — avoid `baseUrl` in tsconfigs (deprecated, errors in TS 6)
 
 ## Validation
 
 ```bash
-npx playwright test --list    # verify Playwright config
-npx playwright test           # run E2E tests (needs dev servers running)
+npx playwright test --list           # verify playwright config
+npx playwright test e2e/US-001.spec.ts  # run a specific test
 ```
 
 ## Operational Notes
 
-- TypeScript 6 deprecates `baseUrl` — use `paths` without it
-- Tailwind CSS v4 uses `@tailwindcss/vite` plugin, no separate config file
-- shadcn components live in `client/src/components/ui/`
+- Root `package.json` uses npm workspaces (`server`, `client`)
+- `concurrently` runs both dev servers from `npm run dev`
+- Playwright `webServer` config starts `npm run dev` automatically during e2e tests
 
 ### Codebase Patterns
 
-- Server entry: `server/src/index.ts`
-- Client entry: `client/src/main.tsx`
-- Path alias: `@/` → `client/src/`
-- CSS utility: `cn()` from `@/lib/utils`
+- shadcn/ui components in `client/src/components/ui/` — use `@/` path alias
+- `cn()` utility at `client/src/lib/utils.ts` (clsx + tailwind-merge)
+- Design tokens: monospace font stack, neutral grays only, chart orange `#FF7F11`
