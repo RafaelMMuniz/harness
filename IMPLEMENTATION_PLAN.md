@@ -6,7 +6,7 @@
 >
 > This file exists for two things only:
 > - **Known Issues** — cross-cutting bugs or regressions that don't map to a single
->   story (e.g., "auto-seed violates BR-102 across all event types"). Append-only.
+>   story. Append-only.
 > - **Decisions** — architectural choices made during implementation, with rationale.
 >   Append-only.
 >

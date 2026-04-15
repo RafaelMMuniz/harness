@@ -1,7 +1,7 @@
 {
   "project": "MiniPanel",
   "branchName": "ralph/minipanel",
-  "description": "MiniPanel \u2014 A self-hosted analytics platform for product teams. Covers Foundation (event collection, identity resolution, sample data, app shell), MVP (event exploration, trend analysis), MMP (numeric aggregations, dimensional breakdowns, comparative charts, funnel analysis, user profiles, visual polish), and Nice-to-haves (saved analyses, autocomplete, multi-event comparison).",
+  "description": "MiniPanel — A self-hosted analytics platform for product teams. Covers Foundation (event collection, identity resolution, sample data, app shell), MVP (event exploration, trend analysis), MMP (numeric aggregations, dimensional breakdowns, comparative charts, funnel analysis, user profiles, visual polish), and Nice-to-haves (saved analyses, autocomplete, multi-event comparison).",
   "userStories": [
     {
       "id": "US-T00",
@@ -21,7 +21,7 @@
         "git commit with message 'test: add Playwright config and shared API helpers'"
       ],
       "priority": -10,
-      "passes": false,
+      "passes": true,
       "notes": "This is test infrastructure only. The helpers define the API contract that the implementation must fulfill. Use the Playwright test() and expect() imports from @playwright/test."
     },
     {
