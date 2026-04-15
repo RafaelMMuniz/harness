@@ -3,7 +3,7 @@
 ## Verdict: FAIL
 
 ## Current Story: US-006
-## Attempts Remaining: 4
+## Attempts Remaining: 3
 
 ## Summary
 
