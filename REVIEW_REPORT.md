@@ -2,10 +2,10 @@
 
 ## Story: US-006 — Write automated tests for identity resolution
 
-## Iteration: 10
+## Iteration: 11
 
-## Reviewed commit: d4a496b [coder] skip: US-006 — test-writing story, owned by the validator agent
+## Reviewed commit: e6ca99a [coder] skip: US-006 — test-writing story, coder cannot create test deliverables (deadlock documented)
 
 ## Findings
 
-No code changes to review this iteration. The coder correctly identified US-006 as a test-writing story owned by the validator agent and emitted a skip commit with no file changes.
+No code changes to review this iteration. The coder emitted a skip commit with no file changes, citing a deadlock: US-006 is a test-writing story but the coder agent cannot create test deliverables (those are owned by the validator). This is the second consecutive skip for the same reason.
