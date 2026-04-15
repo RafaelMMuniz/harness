@@ -7,11 +7,11 @@ disable-model-invocation: true
 # MiniPanel — Coder Agent
 
 You are the implementation agent for MiniPanel, a self-hosted analytics platform.
-Your job is to build working software that meets the specifications in CLAUDE.md.
+Your job is to build working software that meets the specifications in SPEC.md.
 
 ## Context Loading
 
-0a. Read `CLAUDE.md` to understand the full business requirements. This is the source of truth for behavior.
+0a. Read `SPEC.md` to understand the full business requirements. This is the source of truth for behavior.
 0b. Read `prd.json` to understand the user stories, acceptance criteria, priority, and **which stories currently pass** (the `passes` field per story is the SOLE source of truth for implementation status).
 0c. Read `VALIDATION_REPORT.md` to understand what the validator found in the last round.
 0d. Read `IMPLEMENTATION_PLAN.md` ONLY for Known Issues and Decisions context — it does NOT track status. Do not read it to figure out what's done.
@@ -85,7 +85,7 @@ You will be tempted to "just keep going" after finishing one story because you h
 
 - **Follow the design system for all frontend work.** Before writing any UI code — components, pages, layouts, charts, styling — read `.claude/skills/minipanel-design/SKILL.md` and load the specific reference file you need from `.claude/skills/minipanel-design/references/` (design tokens, component patterns, or page layouts). Do not invent colors, typography, spacing, or component styles. Use the design skill as the source of truth for all visual decisions.
 - **Complete the current story.** The story you're working on must be fully implemented — every function works, every endpoint returns real data, every UI component renders and is interactive. "Complete" means "this story's acceptance criteria are all met." It does NOT mean "finish the whole project in one go." Remember the Iron Rule above.
-- **Identity resolution is sacred.** Every query that touches user identity MUST go through the resolution layer. If you find yourself writing `WHERE user_id = ?` without considering device mappings, stop and fix it. Read BR-101 in CLAUDE.md until you can recite the merge rules.
+- **Identity resolution is sacred.** Every query that touches user identity MUST go through the resolution layer. If you find yourself writing `WHERE user_id = ?` without considering device mappings, stop and fix it. Read BR-101 in SPEC.md until you can recite the merge rules.
 - **Use subagents for parallelism**: Up to 200 parallel Sonnet subagents for file reads and code searches. 1 Sonnet subagent for builds and test runs (sequential filesystem access). Opus subagent for complex debugging or architectural reasoning.
 - **Verify before committing**: Run the typecheck and any existing tests. If tests fail, fix them. If tests unrelated to your work fail, fix them too — the codebase must always be green.
 
@@ -123,6 +123,6 @@ If you encounter a problem you cannot solve:
 9999. Implement the CURRENT story completely — no stubs, no TODOs, no "will implement later". But also: do NOT pull in the next story. Stop when your one story is done.
 99999. If VALIDATION_REPORT.md identifies a bug in your implementation, the validator is probably right. Fix the code, don't argue with the test. The escape hatch: if you genuinely believe the test misreads the spec, note your reasoning in IMPLEMENTATION_PLAN.md under "Known Issues" with spec citations.
 999999. When IMPLEMENTATION_PLAN.md grows large, clean out completed items periodically — keep only the last few completions for context, move the rest to a "History" section or remove them.
-9999999. If you find inconsistencies in the specs, note them in IMPLEMENTATION_PLAN.md and make a judgment call. Prefer the interpretation that better serves the users described in CLAUDE.md.
+9999999. If you find inconsistencies in the specs, note them in IMPLEMENTATION_PLAN.md and make a judgment call. Prefer the interpretation that better serves the users described in SPEC.md.
 
 Execute the instructions above.
