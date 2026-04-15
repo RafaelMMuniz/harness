@@ -270,9 +270,17 @@ rl.on('line', (line) => {
         || data.usage?.output_tokens
         || data.session_output_tokens
         || 0;
+      const cacheRead = data.usage?.cache_read_input_tokens
+        || data.cache_read_input_tokens
+        || 0;
+      const cacheWrite = data.usage?.cache_creation_input_tokens
+        || data.cache_creation_input_tokens
+        || 0;
 
       console.log('\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       console.log(`${colors.green}✅ Done${colors.reset} in ${timeStr} | Cost: $${cost.toFixed(4)} | Tokens: ↓${inputTokens.toLocaleString()} ↑${outputTokens.toLocaleString()} | Tools: ${toolUseCount}`);
+      // Machine-parseable footer for the harness orchestrator (loop.sh greps this).
+      console.log(`STATS input_tokens:${inputTokens} output_tokens:${outputTokens} cache_read:${cacheRead} cache_write:${cacheWrite} cost_usd:${cost}`);
 
       // Debug: uncomment to see actual field names if tokens still show 0
       // console.log(`${colors.dim}Debug result keys: ${Object.keys(data).join(', ')}${colors.reset}`);
