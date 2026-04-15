@@ -2,9 +2,9 @@
 
 ## Story: US-002 — Set up SQLite database with connection and schema management
 
-## Iteration: 4
+## Iteration: 5
 
-## Reviewed commit: b51bc6e [coder] impl: US-002 — SQLite database with schema initialization
+## Reviewed commit: d7ba0d0 [coder] fix: US-002 — eager db init to fix vitest live-binding issue
 
 ## Findings
 
@@ -15,6 +15,6 @@
 ### MEDIUM (0)
 
 ### LOW (1)
-- [server/src/db.ts:4] `path.resolve('minipanel.db')` resolves relative to `process.cwd()`, not the module location. If the server is ever started from a working directory other than the project root, the DB file will be created in the wrong location. Consider anchoring to `import.meta.url` or `__dirname`. Minor risk since start scripts control the cwd.
+- [server/src/db.ts:9] `getDb()` is now dead code. With the eager `export const db` pattern, this function is a trivial `return db` wrapper with zero callers outside its own file. Remove it to keep the module surface clean.
 
-## No findings in: Unsafe SQL, Input validation, Identity resolution, Unhandled promise rejection, `any` types, Dead code, Convention violations, Scope creep, Error-handling shortcuts, Logging
+## No findings in: Unsafe SQL, Input validation, Identity resolution, Unhandled promise rejection, `any` types, Convention violations, Scope creep, Error-handling shortcuts, Logging
