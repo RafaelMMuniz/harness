@@ -4,17 +4,17 @@
 
 ## Iteration: 8
 
-## Reviewed commit: f25cf52 [coder] impl: US-004 — POST /api/events/batch with transaction, partial success, identity conflict handling
+## Reviewed commit: a9d9050 [coder] fix: US-004 — increase JSON body parser limit to 10mb for batch endpoint
 
 ## Findings
 
-No issues. Implementation looks clean against reviewed axes.
+### CRITICAL (0)
 
-- All SQL uses parameterized prepared statements (`.prepare(...).run(params)` / `.get(params)`).
-- Zod validates both the wrapper (`batchWrapperSchema`) and each event individually (`eventBodySchema`).
-- Identity conflict detection queries `identity_mappings` via prepared statement inside the transaction loop; within-batch conflicts are correctly caught since SQLite reads see prior writes in the same transaction.
-- No `any` casts; type assertions are narrowly scoped.
-- Partial-success semantics implemented correctly: invalid/conflicting events are skipped and reported in `errors` array without aborting the batch.
-- Scope is appropriate: only `server/src/routes/events.ts` and `IMPLEMENTATION_PLAN.md` touched.
+### HIGH (0)
 
-## No findings in: Unsafe SQL, Missing validation, Identity bypass, Unhandled rejection, `any` casts, Dead code, Convention violations, Scope creep, Error-handling shortcuts, Logging
+### MEDIUM (0)
+
+### LOW (1)
+- [server/src/index.ts:10] Global body parser limit raised to 10mb. The limit applies to all routes, not just `/api/events/batch`. The single-event endpoint and health check don't need 10mb. A route-specific middleware would be more precise — but given Zod validation rejects oversized/malformed payloads on every route, the practical risk is minimal.
+
+## No findings in: Unsafe SQL, Missing input validation, Identity resolution bypass, Unhandled promise rejection, `any` types, Dead code, Convention violations, Scope creep, Error-handling shortcuts, Logging
