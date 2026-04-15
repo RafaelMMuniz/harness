@@ -1,15 +1,7 @@
 import Database from 'better-sqlite3';
 import path from 'node:path';
-import { existsSync, writeFileSync, appendFileSync } from 'node:fs';
 
 export const DB_PATH = path.resolve('minipanel.db');
-
-try {
-  writeFileSync('/tmp/db-debug.txt', [
-    `DB_PATH=${DB_PATH}`,
-    `cwd=${process.cwd()}`,
-  ].join('\n') + '\n');
-} catch {}
 
 let db: Database.Database;
 
@@ -43,10 +35,6 @@ export function initializeDatabase(): void {
       created_at TEXT NOT NULL
     )
   `);
-
-  try {
-    appendFileSync('/tmp/db-debug.txt', `initDB done, exists=${existsSync(DB_PATH)}\n`);
-  } catch {}
 
   console.log('Database initialized successfully');
 }

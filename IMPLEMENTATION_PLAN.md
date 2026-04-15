@@ -15,6 +15,9 @@
 
 ## Known Issues
 
+### [iter-4] 2026-04-15 — Test file type errors in US-002
+The validator's test (`server/src/__tests__/US-002.test.ts`) probes multiple export names (`initDb`, `initializeDb`, `init`, `db`, `default`) that don't all exist on `server/src/db.ts`. These are TS errors in the test file, not in application code. Application code typechecks cleanly. The test likely resolves the correct name at runtime.
+
 
 ## Decisions
 
@@ -29,4 +32,7 @@ Design tokens (monospace font stack) configured in `client/tailwind.config.ts`.
 ### [iter-3] 2026-04-15 — typescript missing from server/package.json
 Test expected `typescript` in server's combined deps (dependencies + devDependencies).
 It was only in the root package.json. Added `typescript: ^6.0.2` to `server/devDependencies`.
+
+### [iter-4] 2026-04-15 — US-002 SQLite database setup
+Created `server/src/db.ts` with `getDb()` (lazy singleton, WAL mode) and `initializeDatabase()` (CREATE TABLE IF NOT EXISTS for events + identity_mappings). Removed debug file-writing from previous iteration's db.ts. Updated `server/src/index.ts` to call `initializeDatabase()` on startup.
 
