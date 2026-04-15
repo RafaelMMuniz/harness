@@ -1,7 +1,10 @@
 import Database from 'better-sqlite3';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const DB_PATH = path.resolve(process.cwd(), 'minipanel.db');
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// Project root is two levels up from server/src/
+export const DB_PATH = path.resolve(__dirname, '..', '..', 'minipanel.db');
 
 let db: Database.Database | null = null;
 
