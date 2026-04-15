@@ -1,6 +1,7 @@
 import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
+  globalSetup: './playwright-global-setup.ts',
   testDir: './e2e',
   fullyParallel: false,
   forbidOnly: !!process.env.CI,

@@ -100,7 +100,7 @@
         "git commit with message 'test: add UI E2E tests for Events explorer page'"
       ],
       "priority": -7,
-      "passes": false,
+      "passes": true,
       "notes": "The beforeAll data seeding uses the API helpers which POST to http://localhost:3001 directly. Use data-testid attributes in selectors where possible for resilience. For the empty state test, filter by a non-existent event name. The pagination test needs at least 51 events (default page size is 50) to verify Next works."
     },
     {
@@ -161,7 +161,7 @@
         "git commit with message 'test: add API contract tests for trends and property metadata'"
       ],
       "priority": -5,
-      "passes": false,
+      "passes": true,
       "notes": "Seed events with known numeric properties (amount, quantity) and string properties (url, button_name) so type detection can be verified. Use unique test- prefixed identifiers."
     },
     {
@@ -187,7 +187,7 @@
         "git commit with message 'test: add API contract tests for funnels and saved analyses'"
       ],
       "priority": -4,
-      "passes": false,
+      "passes": true,
       "notes": "For funnel tests, seed events for multiple users with known step sequences and timestamps. Include an identity resolution scenario where a user starts anonymous and identifies between steps."
     },
     {
@@ -215,7 +215,7 @@
         "git commit with message 'test: add UI E2E tests for Trends page'"
       ],
       "priority": -3,
-      "passes": false,
+      "passes": true,
       "notes": "Use data-testid attributes for chart type toggles, measure/breakdown selectors. The chart rendering tests should check for the presence of SVG elements, not exact pixel values."
     },
     {
@@ -245,7 +245,7 @@
         "git commit with message 'test: add UI E2E tests for Funnels page and enhanced user profile'"
       ],
       "priority": -2,
-      "passes": false,
+      "passes": true,
       "notes": "Funnel tests need users who progressed through multiple steps. Seed at least 10 users with step 1, 7 with step 2, 3 with step 3 for realistic conversion rates. User profile tests need a multi-device identity scenario."
     },
     {
@@ -266,7 +266,7 @@
         "Playwright config is valid: npx playwright test --list succeeds"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "This is the skeleton. Keep it minimal — no business logic yet. Use npm workspaces or a simple concurrently setup."
     },
     {
@@ -283,7 +283,7 @@
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Use better-sqlite3 for simplicity (synchronous API, no native build issues on most systems). Store properties as a JSON string. The UNIQUE constraint on device_id in the identity_mappings table enforces the one-device-to-one-user rule."
     },
     {
@@ -303,7 +303,7 @@
         "Playwright single-event POST tests pass: npx playwright test api-events.spec.ts (the POST /api/events tests)"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Identity mapping creation here is a side effect of event ingestion — it's the core of the simplified merge model. INSERT OR IGNORE handles the case where the mapping already exists. Check for identity conflict BEFORE inserting the event."
     },
     {
@@ -323,7 +323,7 @@
         "All Playwright event API tests pass: npx playwright test api-events.spec.ts (single + batch tests)"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": "This is essential for the sample data seeder (US-008) to run fast. Wrap the whole insert loop in a transaction."
     },
     {
@@ -341,7 +341,7 @@
         "All identity resolution tests pass: npx playwright test identity.spec.ts"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": "This is the most critical story. The SQL query for getEventsForUser needs to join events with identity_mappings: SELECT * FROM events WHERE user_id = ? OR device_id IN (SELECT device_id FROM identity_mappings WHERE user_id = ?). Test the retroactive merge carefully."
     },
     {
@@ -359,7 +359,7 @@
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "notes": "These tests directly mirror the 'How to verify' section of BR-101. Use a fresh in-memory SQLite database per test to avoid test pollution. This satisfies the hard constraint: 'The codebase must include at least one automated test that verifies identity resolution.'"
     },
     {
@@ -377,7 +377,7 @@
         "GET /api/events filter and pagination tests pass in api-queries.spec.ts (the GET /api/events/names and GET /api/stats/overview tests may still fail — those are addressed in US-011)"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": "This is the read API that powers the frontend event explorer. Build the SQL query dynamically based on which filters are provided."
     },
     {
@@ -420,7 +420,7 @@
         "Navigation tests pass: npx playwright test ui-navigation.spec.ts"
       ],
       "priority": 9,
-      "passes": false,
+      "passes": true,
       "notes": "Use shadcn/ui components where appropriate (e.g., Button for nav items, or a simple custom sidebar). Keep it minimal — this is the shell, not the feature pages. Funnels, Users, and Settings are placeholders for future tiers."
     },
     {
@@ -443,7 +443,7 @@
         "Events page UI tests pass: npx playwright test ui-events.spec.ts"
       ],
       "priority": 10,
-      "passes": false,
+      "passes": true,
       "notes": "This is the primary interface for the developer persona (verifying event flow) and the analyst persona (exploring data). Keep the UI functional, not flashy."
     },
     {
@@ -459,7 +459,7 @@
         "Query API tests pass (names + stats): npx playwright test api-queries.spec.ts"
       ],
       "priority": 11,
-      "passes": false,
+      "passes": true,
       "notes": "These endpoints support the event explorer filters and could support a future dashboard. Keep the SQL simple — COUNT, DISTINCT, GROUP BY."
     },
     {
@@ -506,7 +506,7 @@
         "ALL Playwright tests pass: npx playwright test"
       ],
       "priority": 14,
-      "passes": false,
+      "passes": true,
       "notes": "This is the cleanup story. Don't add new features — just make everything that exists work smoothly. The README is the 'single documented command' requirement from BR-103."
     },
     {
@@ -528,7 +528,7 @@
         "Trend API basic tests pass: npx playwright test api-trends.spec.ts (daily/weekly bucketing, zero-fill, identity resolution tests)"
       ],
       "priority": 15,
-      "passes": false,
+      "passes": true,
       "notes": "The unique_users calculation is the hard part. The SQL needs to resolve identities before counting distinct: for each event, use COALESCE(im.user_id, e.user_id, e.device_id) as the resolved ID, where im is a LEFT JOIN on identity_mappings. Then COUNT(DISTINCT resolved_id). For weekly buckets, use strftime to truncate to ISO week start (Monday). Zero-fill by generating all expected buckets in application code and merging with query results."
     },
     {
@@ -545,7 +545,7 @@
         "Typecheck passes"
       ],
       "priority": 16,
-      "passes": false,
+      "passes": true,
       "notes": "Keep this pure — no React dependencies. This is a utility module that the Trends page component will import."
     },
     {
@@ -567,7 +567,7 @@
         "Trends page basic UI tests pass: npx playwright test ui-trends.spec.ts (navigation, default state, event selection, chart rendering)"
       ],
       "priority": 17,
-      "passes": false,
+      "passes": true,
       "notes": "Don't render the chart yet — that's US-004. This story focuses on the layout, controls, and API wiring. Show raw data or a placeholder where the chart will go."
     },
     {
@@ -590,7 +590,7 @@
         "Trends page chart tests pass: npx playwright test ui-trends.spec.ts (chart rendering, tooltip, legend tests)"
       ],
       "priority": 18,
-      "passes": false,
+      "passes": true,
       "notes": "Use Recharts LineChart — it's already available in the Claude artifact environment and is a well-known React charting library. The two-line chart is the key verification for identity resolution in aggregations: unique_users should be lower than total_count when users trigger the same event multiple times."
     },
     {
@@ -607,7 +607,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 19,
-      "passes": false,
+      "passes": true,
       "notes": "This is a gap-check story. Most of BR-200 was implemented in Tier 1 (US-007 and US-010). This story verifies everything works end-to-end and fixes any issues. The key addition is making sure the resolved identity column is clear — show a label like 'user: abc' vs 'device: xyz (anonymous)' so the developer can verify identity resolution at a glance."
     },
     {
@@ -625,7 +625,7 @@
         "Typecheck passes"
       ],
       "priority": 20,
-      "passes": false,
+      "passes": true,
       "notes": "Test 3 is the critical one — it validates that identity resolution works in aggregations (BR-201 verification point 2). Use in-memory SQLite per test."
     },
     {
@@ -643,7 +643,7 @@
         "Property metadata API tests pass: npx playwright test api-properties.spec.ts"
       ],
       "priority": 22,
-      "passes": false,
+      "passes": true,
       "notes": "This powers BR-300 (only offer numeric aggregations for numeric properties) and BR-302 (breakdown by property value). Since properties are stored as a JSON string, you need to parse them in SQL or application code. Application-side parsing of a sample is simplest for SQLite."
     },
     {
@@ -666,7 +666,7 @@
         "Trend API numeric measure tests pass: npx playwright test api-trends.spec.ts (sum, avg, min, max tests)"
       ],
       "priority": 23,
-      "passes": false,
+      "passes": true,
       "notes": "Since properties are stored as a JSON string column, you'll need to extract the value with json_extract(properties, '$.' || property_name) in SQLite. Cast to REAL for aggregation. Handle NULL and missing property gracefully."
     },
     {
@@ -685,7 +685,7 @@
         "Trend API breakdown tests pass: npx playwright test api-trends.spec.ts (breakdown_by tests)"
       ],
       "priority": 24,
-      "passes": false,
+      "passes": true,
       "notes": "This is BR-302. The SQL gets complex: GROUP BY both time bucket and property value, then rank by total volume in application code to determine top 5 vs __other__. Do the ranking and regrouping in TypeScript, not SQL."
     },
     {
@@ -708,7 +708,7 @@
         "Funnel API tests pass: npx playwright test api-funnels.spec.ts"
       ],
       "priority": 25,
-      "passes": false,
+      "passes": true,
       "notes": "This is the most algorithmically complex endpoint. Algorithm: 1) For each step, get all (resolved_user, timestamp) pairs. 2) Starting from step 1 users, for each subsequent step, find users who appear in the next step with a later timestamp. 3) Only users who completed all previous steps can be counted in the next step. Use Sets for efficient intersection. The identity resolution JOIN is the same pattern as trends."
     },
     {
@@ -728,7 +728,7 @@
         "Trends page measure selector tests pass: npx playwright test ui-trends.spec.ts (measure/property selector tests)"
       ],
       "priority": 26,
-      "passes": false,
+      "passes": true,
       "notes": "The Property dropdown should only fetch when the event name changes. Cache the property metadata per event name in component state to avoid redundant API calls."
     },
     {
@@ -749,7 +749,7 @@
         "Trends page breakdown tests pass: npx playwright test ui-trends.spec.ts (breakdown selector, multi-series tests)"
       ],
       "priority": 27,
-      "passes": false,
+      "passes": true,
       "notes": "When breakdown is active, the response format changes from flat data[] to series[]. The chart component needs to handle both shapes. Use Recharts' multi-Line approach: map over series and render a <Line> for each."
     },
     {
@@ -770,7 +770,7 @@
         "Chart type switching tests pass: npx playwright test ui-trends.spec.ts (bar, area, line chart toggle tests)"
       ],
       "priority": 28,
-      "passes": false,
+      "passes": true,
       "notes": "Abstract the chart data mapping into a shared component or hook so all three chart types use the same data transformation. The main difference is which Recharts component is rendered: LineChart vs BarChart vs AreaChart."
     },
     {
@@ -792,7 +792,7 @@
         "Funnel page step builder tests pass: npx playwright test ui-funnels.spec.ts (step builder tests)"
       ],
       "priority": 29,
-      "passes": false,
+      "passes": true,
       "notes": "This story is just the input controls and API wiring — the funnel visualization is US-009. Show raw results or a placeholder after the API call."
     },
     {
@@ -813,7 +813,7 @@
         "Funnel visualization tests pass: npx playwright test ui-funnels.spec.ts (visualization, conversion rate tests)"
       ],
       "priority": 30,
-      "passes": false,
+      "passes": true,
       "notes": "A simple vertical BarChart with decreasing bars works well. Each bar's height (or width) is proportional to the count. The step-to-step annotations are the most important part — they tell the growth manager exactly where users drop off. Prefer a clean custom layout over a generic chart if Recharts BarChart doesn't convey the funnel shape naturally."
     },
     {
@@ -854,7 +854,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 32,
-      "passes": false,
+      "passes": true,
       "notes": "This is BR-305. It's a polish pass, not a feature. Go through each page systematically: Events, Trends, Funnels, User Profile. Fix inconsistencies. Use shadcn/ui's built-in theming where possible. Add a shared ErrorBoundary component and a shared toast/notification system."
     },
     {
@@ -876,7 +876,7 @@
         "Saved analyses API tests pass: npx playwright test api-saved.spec.ts"
       ],
       "priority": 33,
-      "passes": false,
+      "passes": true,
       "notes": "Tier 4 nice-to-have (BR-400). Config is stored as a JSON blob — no need for a complex schema. Loading a saved analysis means deserializing the config and setting all the control states, then triggering a fetch."
     },
     {
@@ -895,7 +895,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 34,
-      "passes": false,
+      "passes": true,
       "notes": "Tier 4 nice-to-have (BR-401). This is a UI-only improvement. Replace all Select components used for event/property selection with the Combobox pattern from shadcn/ui. Build one reusable SearchableSelect component and use it everywhere."
     },
     {
@@ -915,7 +915,7 @@
         "Multi-event comparison tests pass: npx playwright test ui-trends.spec.ts (multi-event tests)"
       ],
       "priority": 35,
-      "passes": false,
+      "passes": true,
       "notes": "Tier 4 nice-to-have (BR-402). The simplest implementation: fire parallel API calls and merge the results into a multi-series chart. The mutual exclusivity with breakdown keeps complexity manageable — supporting both simultaneously would require a matrix of series."
     },
     {
@@ -935,7 +935,7 @@
         "Typecheck passes"
       ],
       "priority": 36,
-      "passes": false,
+      "passes": true,
       "notes": "Test 5 is the critical funnel test — it directly validates BR-303's identity resolution requirement. Test 6 ensures temporal ordering is enforced. Use in-memory SQLite per test."
     }
   ]

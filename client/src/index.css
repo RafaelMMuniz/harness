@@ -1,0 +1,8 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --color-chart-orange: #FF7F11;
+  --color-chart-bg: #FEF9F3;
+}
