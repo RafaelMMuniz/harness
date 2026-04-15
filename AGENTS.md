@@ -1,27 +1,34 @@
 ## Build & Run
 
-(Not yet bootstrapped — coder iteration 1 will populate this)
+```bash
+npm install          # installs all workspace dependencies (server + client)
+npm run dev          # starts both server (port 3001) and client (port 5173) via concurrently
+npm run typecheck    # typechecks both server and client
+npm run build        # builds both server and client
+```
+
+### Workspaces
+
+- `server/` — Express.js + TypeScript backend. Dev: `tsx watch`. Typecheck: `tsc --noEmit`.
+- `client/` — React + Vite + TypeScript + Tailwind v4 + shadcn/ui frontend. Dev: `vite`. Typecheck: `tsc -b`.
+
+### Ports
+
+- Backend: 3001
+- Frontend: 5173 (proxies `/api/*` to backend)
 
 ## Validation
 
-### Test Commands
-```bash
-npm test                              # Backend unit/integration tests (requires backend workspace)
-npm run typecheck                     # TypeScript check across workspaces (requires both)
-npx tsc --noEmit -p tsconfig.e2e.json # TypeScript check on e2e test files only
-npx playwright test --list            # List all e2e test cases
-npx playwright test                   # Run all Playwright e2e tests (needs dev server)
-```
-
-### Current State (iteration 1)
-- Backend/frontend workspaces not bootstrapped — `npm test` and `npm run typecheck` fail
-- e2e/helpers.ts compiles cleanly; no spec files exist yet
-- Playwright config ready but no tests to run
+(Not yet set up — validator iteration 1 will populate this)
 
 ## Operational Notes
 
-(none yet)
+- Root `overrides.vite: "^6.0.0"` is required to prevent Vite 5/6 type conflicts in npm workspace hoisting.
+- TypeScript 6 deprecates `baseUrl` in tsconfig. Client uses `paths` without `baseUrl` (supported since TS 5.0).
+- After changing root package.json workspaces or overrides, delete `node_modules/` and `package-lock.json` and reinstall.
 
 ### Codebase Patterns
 
-(none yet)
+- shadcn/ui components in `client/src/components/ui/`. Config in `client/components.json`.
+- Path alias `@/` maps to `client/src/` (via Vite `resolve.alias` and tsconfig `paths`).
+- CSS vars for design tokens in `client/src/index.css`. Font stack: system monospace.
