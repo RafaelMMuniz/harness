@@ -1,15 +1,20 @@
 # Review Report
 
-## Story: US-003 — Implement event ingestion API endpoint
+## Story: US-004 — Implement batch event ingestion endpoint
 
-## Iteration: 7
+## Iteration: 8
 
-## Reviewed commit: b316cbd [coder] impl: US-003 — POST /api/events with Zod validation, identity conflict detection, and mapping creation
+## Reviewed commit: f25cf52 [coder] impl: US-004 — POST /api/events/batch with transaction, partial success, identity conflict handling
 
 ## Findings
 
 No issues. Implementation looks clean against reviewed axes.
 
-All four SQL statements use parameterized `.prepare(...).run(params)` / `.get(params)`. Zod schema validates the request body before any DB access. Identity conflict check correctly queries `identity_mappings` by `device_id` before inserting the event. Handler is fully synchronous (better-sqlite3), so no unhandled-rejection surface. No `any` types — all assertions use specific interfaces. Scope is limited to US-003 files (`server/src/routes/events.ts`, `server/src/index.ts`, `IMPLEMENTATION_PLAN.md`).
+- All SQL uses parameterized prepared statements (`.prepare(...).run(params)` / `.get(params)`).
+- Zod validates both the wrapper (`batchWrapperSchema`) and each event individually (`eventBodySchema`).
+- Identity conflict detection queries `identity_mappings` via prepared statement inside the transaction loop; within-batch conflicts are correctly caught since SQLite reads see prior writes in the same transaction.
+- No `any` casts; type assertions are narrowly scoped.
+- Partial-success semantics implemented correctly: invalid/conflicting events are skipped and reported in `errors` array without aborting the batch.
+- Scope is appropriate: only `server/src/routes/events.ts` and `IMPLEMENTATION_PLAN.md` touched.
 
-## No findings in: Unsafe SQL, Input validation, Identity resolution, Unhandled promise rejection, `any` types, Dead code, Convention violations, Scope creep, Error-handling shortcuts, Logging
+## No findings in: Unsafe SQL, Missing validation, Identity bypass, Unhandled rejection, `any` casts, Dead code, Convention violations, Scope creep, Error-handling shortcuts, Logging
