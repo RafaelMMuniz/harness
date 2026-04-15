@@ -297,7 +297,7 @@
         "Playwright single-event POST tests pass: npx playwright test api-events.spec.ts (the POST /api/events tests)"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Identity mapping creation here is a side effect of event ingestion — it's the core of the simplified merge model. INSERT OR IGNORE handles the case where the mapping already exists. Check for identity conflict BEFORE inserting the event."
     },
     {
