@@ -203,3 +203,24 @@ Now let me commit.
 [2m   [validator] validate: US-T00 — 1 confirmed, 0 failing, project not bootstrapped[0m
 [2m   [0m
 [2m   ... +3 more lines[0m
+[32m   ↳ Result:[0m
+[90m     [main 7967aae] [validator] validate: US-T00 — 1 confirmed, 0 failing, project not bootstrapped[0m
+[90m      3 files changed, 288 insertions(+), 5 deletions(-)[0m
+[90m      rewrite VALIDATION_REPORT.md (80%)[0m
+[90m      create mode 100644 harness/logs/iteration-001-validator.log[0m
+[90m     [rerun: b6][0m
+**Verdict: FAIL**
+
+Validation complete. Here's what I found:
+
+- **US-T00: CONFIRMED** — The only story claiming `passes: true` is legitimate. `playwright.config.ts` and `e2e/helpers.ts` match the spec, TypeScript compiles cleanly.
+- **Project is unbootstrapped** — `backend/` and `frontend/` are empty (`.gitkeep` only). No application code, server, database, or frontend exists.
+- **0 test specs exist** — Only the shared helpers file. `npx playwright test --list` finds 0 tests.
+- **No lying claims** — The coder correctly marked only US-T00 as passing. All other stories remain `passes: false`.
+- **Coder integrity: 1 claimed, 1 confirmed, 0 lying**
+
+The coder needs to continue with US-T01 (API contract test specs), US-T02 (identity resolution E2E specs), and then US-001 (project bootstrap) to make progress.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[32m✅ Done[0m in 1m 51s | Cost: $0.6557 | Tokens: ↓10 ↑5,412 | Tools: 23
+STATS input_tokens:10 output_tokens:5412 cache_read:390749 cache_write:51990 cost_usd:0.655662
