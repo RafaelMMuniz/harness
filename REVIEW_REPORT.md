@@ -2,9 +2,9 @@
 
 ## Story: US-001 — Initialize project with monorepo structure
 
-## Iteration: 1
+## Iteration: 2
 
-## Reviewed commit: 889b4b2 [coder] impl: US-001 Initialize project with monorepo structure — Express+TS backend, React+Vite+Tailwind frontend, shadcn Button, npm workspaces
+## Reviewed commit: e9d2b3b [coder] fix: US-001 — add typescript to server/package.json devDependencies
 
 ## Findings
 
@@ -12,11 +12,9 @@
 
 ### HIGH (0)
 
-### MEDIUM (1)
-- [server/src/index.ts:7] `cors()` called with no origin config — allows all origins by default. Acceptable for local dev scaffolding, but should be locked down before any story exposes real data endpoints. No action needed now; flagging for awareness.
+### MEDIUM (0)
 
-### LOW (2)
-- [client/tsconfig.node.json] Removed `noUncheckedIndexedAccess` — minor strictness reduction. The main `tsconfig.app.json` still governs application code, so impact is limited to `vite.config.ts` only.
-- [server/src/index.ts] `initializeDatabase()` import and call removed from server entry point (was added in a prior iteration for US-002). Correct for US-001 scope, but `server/src/db.ts` still exists on disk as an unstaged deletion — stale file will need cleanup.
+### LOW (1)
+- [package-lock.json] Lock file diff removed 11 `lightningcss-*` platform-specific optional dependencies. Likely a side-effect of `npm install` normalizing for the current OS/arch rather than an intentional change. No functional impact, but the lock file is now less portable to other platforms (CI, teammates on Linux). Worth a `npm install` on CI to regenerate if cross-platform builds matter.
 
-## No findings in: Unsafe SQL, Input validation, Identity resolution, Unhandled promise rejections, `any` types, Dead code, Convention violations, Scope creep, Logging
+## No findings in: Unsafe SQL, Input validation, Identity resolution, Unhandled promise rejections, `any` types, Dead code, Convention violations, Scope creep, Error handling, Logging
