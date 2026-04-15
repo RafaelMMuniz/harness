@@ -198,12 +198,12 @@ describe('US-002: Database schema', () => {
         "INSERT INTO identity_mappings (device_id, user_id, created_at) VALUES ('dev-unique-test', 'user-1', '2024-01-01T00:00:00Z')"
       ).run();
 
-      // Duplicate device_id should throw
+      // Duplicate device_id should throw a UNIQUE constraint error
       expect(() => {
         db.prepare(
           "INSERT INTO identity_mappings (device_id, user_id, created_at) VALUES ('dev-unique-test', 'user-2', '2024-01-01T00:00:00Z')"
         ).run();
-      }).toThrow();
+      }).toThrow(/UNIQUE constraint/i);
     });
 
     it('rejects events with NULL event_name', () => {
@@ -211,7 +211,7 @@ describe('US-002: Database schema', () => {
         db.prepare(
           "INSERT INTO events (event_name, timestamp) VALUES (NULL, '2024-01-01T00:00:00Z')"
         ).run();
-      }).toThrow();
+      }).toThrow(/NOT NULL constraint/i);
     });
 
     it('rejects events with NULL timestamp', () => {
@@ -219,7 +219,7 @@ describe('US-002: Database schema', () => {
         db.prepare(
           "INSERT INTO events (event_name, timestamp) VALUES ('click', NULL)"
         ).run();
-      }).toThrow();
+      }).toThrow(/NOT NULL constraint/i);
     });
 
     it('allows NULL properties in events', () => {
@@ -286,7 +286,7 @@ describe('US-002: Database schema', () => {
         db.prepare(
           "INSERT INTO identity_mappings (device_id, user_id, created_at) VALUES (NULL, 'user-x', '2024-01-01T00:00:00Z')"
         ).run();
-      }).toThrow();
+      }).toThrow(/NOT NULL constraint/i);
     });
 
     it('rejects identity_mappings with NULL user_id', () => {
@@ -294,7 +294,7 @@ describe('US-002: Database schema', () => {
         db.prepare(
           "INSERT INTO identity_mappings (device_id, user_id, created_at) VALUES ('dev-null-uid', NULL, '2024-01-01T00:00:00Z')"
         ).run();
-      }).toThrow();
+      }).toThrow(/NOT NULL constraint/i);
     });
 
     it('rejects identity_mappings with NULL created_at', () => {
@@ -302,7 +302,7 @@ describe('US-002: Database schema', () => {
         db.prepare(
           "INSERT INTO identity_mappings (device_id, user_id, created_at) VALUES ('dev-null-cat', 'user-x', NULL)"
         ).run();
-      }).toThrow();
+      }).toThrow(/NOT NULL constraint/i);
     });
 
     it('AUTOINCREMENT ids are monotonically increasing', () => {
