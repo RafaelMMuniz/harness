@@ -21,7 +21,7 @@
         "git commit with message 'test: add Playwright config and shared API helpers'"
       ],
       "priority": -10,
-      "passes": true,
+      "passes": false,
       "notes": "This is test infrastructure only. The helpers define the API contract that the implementation must fulfill. Use the Playwright test() and expect() imports from @playwright/test."
     },
     {
@@ -260,7 +260,7 @@
         "Playwright config is valid: npx playwright test --list succeeds"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "This is the skeleton. Keep it minimal — no business logic yet. Use npm workspaces or a simple concurrently setup."
     },
     {
