@@ -6,6 +6,7 @@ harness/logs/
 test-results/
 playwright-report/
 CLAUDE.local.md
+minipanel.db
 *.db
 *.db-shm
 *.db-wal

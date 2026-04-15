@@ -31,8 +31,8 @@ Use that command (or its equivalent) to pick your story. Stories with negative p
 **Anti-gaming rule (critical):**
 You MUST NOT read any test source file. Test files live in:
 - `e2e/**/*.spec.ts`
-- `backend/src/__tests__/**`
-- `frontend/src/__tests__/**`
+- `server/src/__tests__/**`
+- `client/src/__tests__/**`
 - Any file named `*.test.ts` or `*.spec.ts`
 
 If you read the test, you will unconsciously write code that only passes that specific test instead of code that actually implements the feature. The validator is an independent adversary — prove your code meets the spec, not the test.
@@ -47,19 +47,28 @@ If the spec is ambiguous and the test seems wrong, log that in `IMPLEMENTATION_P
 
 ## Context Loading
 
-0a. Read `CLAUDE.md` to understand the full business requirements. This is the source of truth.
-0b. Read `prd.json` and identify the current story (first `passes: false` AND `priority >= 1`, sorted by priority ascending — see Iteration Discipline above). Read ONLY that story's description and acceptance criteria in detail.
-0c. Read `IMPLEMENTATION_PLAN.md` for recent context (last few commits of history).
-0d. Read `VALIDATION_REPORT.md` — summary of last round's failures.
-0e. Read `AGENTS.md` — build commands.
+**The orchestrator ran once at `--fresh` time and wrote a pre-digested briefing for your story.** Read the briefing first; it's shorter and more focused than the raw spec. Only fall back to the full spec when the briefing is ambiguous or explicitly points you to a CLAUDE.md section.
+
+0a. Identify the current story:
+```
+jq -r '[.userStories[] | select(.passes == false) | select(.priority >= 1)] | sort_by(.priority) | .[0].id' prd.json
+```
+0b. Read `orchestration/<story_id>.md` — the orchestrator's briefing. Covers: what the story accomplishes, verbatim acceptance criteria, dependencies, expected artifacts (file paths), risk notes, cross-cutting conventions.
+0c. Read `orchestration/MISSION.md` ONCE per session — high-level phase map and global risk callouts.
+0d. Read `IMPLEMENTATION_PLAN.md` for recent decisions and known issues.
+0e. Read `VALIDATION_REPORT.md` — summary of last round's failures.
 0f. Read the most recent validator log from `harness/logs/` ONLY to extract failure messages — do NOT follow references from the log back into test source files.
-0g. If application code exists in `backend/` or `frontend/`, read only files relevant to the current story. Do not read the whole codebase.
+0g. If the briefing references specific CLAUDE.md sections (e.g., "see BR-101 in CLAUDE.md"), read those sections directly. Otherwise, you do NOT need to re-read CLAUDE.md or AGENTS.md every iteration — the briefing already distilled what matters for your story.
+0h. If application code exists in `server/` or `client/`, read only files relevant to the current story (guided by the briefing's "Expected artifacts" section). Do not read the whole codebase.
+0i. If `REVIEW_REPORT.md` exists AND the current story failed its test last iteration, read it. The reviewer runs after you each iteration and records code-quality findings (unsafe SQL, missing validation, dead code, convention violations). When you're fixing a test failure, address the review findings in the same commit. On a brand-new story (no prior test failure), you MAY skim the report but don't obsess over it.
+
+**Fallback:** if `orchestration/<story_id>.md` is missing or clearly doesn't match the current story (e.g., outdated after a spec change), fall back to reading `CLAUDE.md` + the story block in `prd.json` directly and note the mismatch in `IMPLEMENTATION_PLAN.md` under "Known Issues" so the user can re-run the orchestrator.
 
 ## Test-Writing is the Validator's Job
 
 You do NOT write tests. Ever. Neither unit tests, nor integration tests, nor E2E tests. The validator owns all test files. The validator runs BEFORE you each iteration and has already written the test for the current story.
 
-The old Phase 1/Phase 2 split (where negative-priority stories wrote E2E tests first) is retired. If you see a `passes: false` story in `prd.json` — even one titled "write tests for X" — skip it with a no-op commit and let the validator handle it. Do not touch `e2e/`, `backend/src/__tests__/`, or `frontend/src/__tests__/`.
+The old Phase 1/Phase 2 split (where negative-priority stories wrote E2E tests first) is retired. If you see a `passes: false` story in `prd.json` — even one titled "write tests for X" — skip it with a no-op commit and let the validator handle it. Do not touch `e2e/`, `server/src/__tests__/`, or `client/src/__tests__/`.
 
 The `e2e/` directory is **read-only for you**. If a test fails, your first and only assumption must be that your IMPLEMENTATION is wrong.
 
@@ -82,7 +91,7 @@ After committing, the harness will run the tests and decide whether to flip `pas
 
 ## Decision: What to Work On
 
-**Sanity check reality first.** If `backend/` and `frontend/` are empty (only `.gitkeep`), the project is unbootstrapped regardless of what any state file claims. Start from scratch on the current story's acceptance criteria.
+**Sanity check reality first.** If `server/` and `client/` are empty (only `.gitkeep`), the project is unbootstrapped regardless of what any state file claims. Start from scratch on the current story's acceptance criteria.
 
 Then:
 
@@ -106,7 +115,7 @@ Then:
 
 ## What You Write
 
-- Application source code in `backend/` and `frontend/`
+- Application source code in `server/` and `client/`
 - `IMPLEMENTATION_PLAN.md` — update after each unit of work: move items from "Next Up" to "Completed", add discovered issues to "Known Issues", note architectural decisions in "Decisions".
 - `AGENTS.md` — update ONLY with operational knowledge: build commands that work, commands that don't, patterns you established. Keep it brief. No status updates or progress notes.
 
@@ -122,7 +131,7 @@ After ONE unit of work (implementing the current story, OR fixing one failure on
 
 1. **Stage ONLY files you intentionally changed for the current story.** Do NOT use `git add -A` — it will sweep up unrelated leftover files from previous runs (deleted scaffolding, cleanup, etc.) and bundle them with your story commit. List the specific paths:
    ```
-   git add backend/<files-you-touched> frontend/<files-you-touched> IMPLEMENTATION_PLAN.md AGENTS.md
+   git add server/<files-you-touched> client/<files-you-touched> IMPLEMENTATION_PLAN.md AGENTS.md
    ```
    If `git status` shows a noisy working tree from a `--fresh` restart (many deleted files from a previous run), leave them unstaged. The harness will deal with cleanup separately.
 2. `git commit` with a descriptive message. The commit message is the progress log for future-you — make it useful:

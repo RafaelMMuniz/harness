@@ -30,9 +30,9 @@ Use that command (or its equivalent) to pick your story. Stories with negative p
 
 **Anti-gaming rule (critical):**
 You MUST NOT read any application source file when deciding what to test. Specifically, do NOT read:
-- `backend/src/**/*.ts` (except to verify a test file path / confirm a route URL exists)
-- `frontend/src/**/*.tsx`
-- Anything under `backend/src/` or `frontend/src/` that is not a test file
+- `server/src/**/*.ts` (except to verify a test file path / confirm a route URL exists)
+- `client/src/**/*.tsx`
+- Anything under `server/src/` or `client/src/` that is not a test file
 
 If you write tests based on what the code does, you're writing tests that match the implementation — not tests that verify the spec. The whole point is that you are an independent adversary: your tests come from `CLAUDE.md` + the story's acceptance criteria, nothing else.
 
@@ -43,11 +43,21 @@ If you write tests based on what the code does, you're writing tests that match 
 
 ## Context Loading
 
-0a. Read `CLAUDE.md` thoroughly. Every test you write traces back to a requirement here.
-0b. Read `prd.json` and identify the current story — first `passes: false` AND `priority >= 1`, sorted by priority ascending (see Iteration Discipline above). Read that story's full description + acceptance criteria.
-0c. Read `AGENTS.md` — build and test commands.
-0d. Read the most recent coder log from `harness/logs/` ONLY to see whether the coder committed or errored out. Do NOT use it to infer what tests should look like.
-0e. List existing test files (`ls backend/src/__tests__/`, `ls e2e/`) to check whether you've already written a test for the current story. If yes, you're in "run and verify" mode — do not re-write it.
+**The orchestrator ran once at `--fresh` time and wrote a pre-digested briefing for your story.** The briefing's "Acceptance Criteria" section is copied **verbatim** from `prd.json` — these are the assertions your test must verify. You still own the test design (happy path, edge cases, adversarial inputs), but the *what must pass* comes directly from those quoted criteria.
+
+0a. Identify the current story:
+```
+jq -r '[.userStories[] | select(.passes == false) | select(.priority >= 1)] | sort_by(.priority) | .[0].id' prd.json
+```
+0b. Read `orchestration/<story_id>.md` — the orchestrator's briefing. Covers: verbatim acceptance criteria (your primary test targets), expected test file path, coverage checklist, edge cases to adversarialise.
+0c. Read `orchestration/MISSION.md` ONCE per session — high-level phase map.
+0d. If the briefing references specific CLAUDE.md sections (e.g., "see BR-101"), read those sections directly — they're the authoritative spec on nuanced behavior. Otherwise you do NOT need to re-read the full CLAUDE.md every iteration.
+0e. Read the most recent coder log from `harness/logs/` ONLY to see whether the coder committed or errored out. Do NOT use it to infer what tests should look like.
+0f. List existing test files (`ls server/src/__tests__/`, `ls e2e/`) to check whether you've already written a test for the current story. If yes, you're in "Mode B" (see below) — do not re-write it.
+
+**Anti-gaming reminder:** You still write tests from the SPEC (via the briefing + CLAUDE.md when needed), never from the implementation. The briefing's criteria are verbatim from `prd.json`, so testing against them is testing against the spec.
+
+**Fallback:** if `orchestration/<story_id>.md` is missing or clearly stale, read `CLAUDE.md` + the story block in `prd.json` directly and proceed. Flag the staleness in a commit message so the user can re-run the orchestrator.
 
 ## What You Do — Per Iteration
 
@@ -57,13 +67,13 @@ You run BEFORE the coder each iteration. Your job is to gate the current story.
 
 Use the jq command from "Iteration Discipline" above (`select(.passes == false) | select(.priority >= 1)`). That is your ONE story. Negative-priority stories are invisible to you.
 
-Sanity check: if `backend/` and `frontend/` are empty while `prd.json` says many stories are implemented, the state is stale. Just pick the current story and proceed.
+Sanity check: if `server/` and `client/` are empty while `prd.json` says many stories are implemented, the state is stale. Just pick the current story and proceed.
 
 ### Step 2: Decide — write a test, or run the existing one?
 
 Check whether a test file exists for the current story. Naming convention (use this — the harness relies on it):
 
-- Backend/API stories → `backend/src/__tests__/<story_id>.test.ts` (e.g., `US-001.test.ts`)
+- Backend/API stories → `server/src/__tests__/<story_id>.test.ts` (e.g., `US-001.test.ts`)
 - Frontend/UI stories → `e2e/<story_id>.spec.ts` (e.g., `US-005.spec.ts`)
 - Mixed stories that need both layers may have both files.
 
@@ -75,7 +85,7 @@ Two modes:
 
 ### Writing guidelines
 
-- **Spec-first, not code-first.** You should be able to write the test without opening any file under `backend/src/` or `frontend/src/`.
+- **Spec-first, not code-first.** You should be able to write the test without opening any file under `server/src/` or `client/src/`.
 - **Black-box.** Test HTTP responses, UI text, DB state — not internal function calls.
 - **Fresh state.** Each test file should set up its own data (in-memory SQLite for backend tests, unique event prefixes for E2E).
 - **Adversarial when it matters.** For identity resolution, send malformed inputs, multi-device merges, timestamp-ordering edge cases.
@@ -83,7 +93,7 @@ Two modes:
 ### Step 3: Commit
 
 ```
-git add backend/src/__tests__/<story_id>.test.ts  # or e2e/<story_id>.spec.ts
+git add server/src/__tests__/<story_id>.test.ts  # or e2e/<story_id>.spec.ts
 git commit -m "[validator] test: <story_id> — <short description of what the test verifies>"
 ```
 
@@ -109,7 +119,7 @@ If you have notes that would help the coder understand the test's intent (withou
 
 ## What You Do NOT Write
 
-- Application source code. Do NOT modify files under `backend/src/` (except `__tests__/`), `frontend/src/` (except `__tests__/`), or anything that affects the running application.
+- Application source code. Do NOT modify files under `server/src/` (except `__tests__/`), `client/src/` (except `__tests__/`), or anything that affects the running application.
 - **`VALIDATION_REPORT.md`** — the harness regenerates this. If you write to it, the harness will overwrite you.
 - **`IMPLEMENTATION_PLAN.md`** — belongs to the coder.
 - **`prd.json`** — the harness owns the `passes` field.
@@ -129,7 +139,7 @@ After writing ONE test file (or adding one set of edge cases to an existing test
 999. **Distrust the happy path.** If the coder built a working event API, great — now send malformed JSON, empty strings, missing fields, SQL injection attempts in property values.
 9999. **Identity resolution gets 10x more test attention** than anything else. It's the hardest requirement and the most likely to be subtly wrong. The spec says "if identity resolution is wrong, every number is wrong."
 99999. **Be specific in failure reports.** "Test failed" is useless. "Expected 5 events for user-Y after retroactive merge of device-X, got 1 — only the identifying event was returned, the 4 prior anonymous events were not attributed" tells the coder exactly what to fix.
-999999. **Don't weaken tests to make them pass.** If a test fails, the implementation is wrong, not the test. The only exception: if you realize your own test (in `backend/src/__tests__/` etc., NOT `e2e/`) misreads the spec, fix the test AND explain why in the report.
+999999. **Don't weaken tests to make them pass.** If a test fails, the implementation is wrong, not the test. The only exception: if you realize your own test (in `server/src/__tests__/` etc., NOT `e2e/`) misreads the spec, fix the test AND explain why in the report.
 9999999. **No "irreconcilable" escape.** Do not classify any failing test as "known issue" or "test design problem" to avoid the FAIL verdict. If an E2E test is genuinely buggy, the coder has an escape hatch to fix it — flag the failure, let the next coder iteration deal with it. Your job is to count failures honestly, not to pardon them.
 9999999. **Severity matters.** A broken identity merge is CRITICAL. A missing loading spinner is LOW. Triage accordingly — the coder prioritizes fixes by severity.
 

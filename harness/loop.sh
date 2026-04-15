@@ -15,7 +15,7 @@ set -eo pipefail
 # The --fresh flag is the "nuclear restart" — use it when you want to wipe
 # all prior implementation work and let the harness iterate from a clean slate.
 # It:
-#   1. Deletes everything inside backend/ and frontend/ except .gitkeep
+#   1. Deletes everything inside server/ and client/ except .gitkeep
 #   2. Resets VALIDATION_REPORT.md to "NOT YET RUN"
 #   3. Resets IMPLEMENTATION_PLAN.md to the initial template
 #   4. Resets AGENTS.md to the initial template
@@ -33,9 +33,17 @@ cd "$PROJECT_ROOT"
 MAX_ITERATIONS=0                  # 0 = unlimited
 MAX_ATTEMPTS_PER_STORY=5          # Abandon a story after this many failed coder passes and move on
 MAX_AGENT_RETRIES=100             # Re-invoke agent if CLI exits non-zero
-MODEL_CODER="opus"
-MODEL_VALIDATOR="opus"
+MODEL_ORCHESTRATOR="opus"         # One-shot planner, runs before the main loop
+MODEL_VALIDATOR="opus"            # Writes ONE test file per story
+MODEL_CODER="opus"                # Implements ONE story per iteration
+MODEL_REVIEWER="opus"             # Advisory code review after the coder, before the test
 BRANCH=$(git branch --show-current 2>/dev/null || echo "main")
+
+# --- Extended thinking ---
+# High reasoning effort for every agent invocation. MAX_THINKING_TOKENS overrides
+# the alwaysThinkingEnabled setting, which has a known persistence bug (anthropics/claude-code#13532).
+# 20000 tokens = generous budget; model uses what it needs, harmless if overshot.
+export MAX_THINKING_TOKENS=20000
 MONITOR_URL=""  # Disabled locally — don't POST to the shared monitor while iterating on this branch
 
 # --- Parse arguments ---
@@ -57,21 +65,25 @@ done
 fresh_reset() {
   echo "━━━━━━━━━━ --fresh: resetting project to clean slate ━━━━━━━━━━"
 
-  # 1. Wipe backend/ and frontend/ contents (keep .gitkeep)
-  if [ -d "$PROJECT_ROOT/backend" ]; then
-    find "$PROJECT_ROOT/backend" -mindepth 1 -not -name '.gitkeep' -delete 2>/dev/null || true
-    echo "  - Wiped backend/"
+  # 1. Wipe server/ and client/ contents (keep .gitkeep)
+  if [ -d "$PROJECT_ROOT/server" ]; then
+    find "$PROJECT_ROOT/server" -mindepth 1 -not -name '.gitkeep' -delete 2>/dev/null || true
+    echo "  - Wiped server/"
   fi
-  if [ -d "$PROJECT_ROOT/frontend" ]; then
-    find "$PROJECT_ROOT/frontend" -mindepth 1 -not -name '.gitkeep' -delete 2>/dev/null || true
-    echo "  - Wiped frontend/"
+  if [ -d "$PROJECT_ROOT/client" ]; then
+    find "$PROJECT_ROOT/client" -mindepth 1 -not -name '.gitkeep' -delete 2>/dev/null || true
+    echo "  - Wiped client/"
   fi
 
-  # 2. Remove stray runtime artifacts
+  # 2. Remove stray runtime artifacts (DB lives at project root per server/src/db.ts)
   rm -f "$PROJECT_ROOT"/*.db "$PROJECT_ROOT"/*.db-wal "$PROJECT_ROOT"/*.db-shm 2>/dev/null || true
-  rm -f "$PROJECT_ROOT"/backend/*.db "$PROJECT_ROOT"/backend/*.db-wal "$PROJECT_ROOT"/backend/*.db-shm 2>/dev/null || true
   rm -rf "$PROJECT_ROOT/e2e" 2>/dev/null || true
-  echo "  - Removed runtime DB + e2e/ (Phase 1 will recreate)"
+  echo "  - Removed runtime DB + e2e/ (validator will recreate)"
+
+  # 2b. Wipe orchestrator briefings — the orchestrator regenerates them on this fresh run
+  rm -rf "$PROJECT_ROOT/orchestration" 2>/dev/null || true
+  rm -f "$PROJECT_ROOT/REVIEW_REPORT.md" 2>/dev/null || true
+  echo "  - Removed orchestration/ briefings and REVIEW_REPORT.md (will regenerate)"
 
   # 3. Reset VALIDATION_REPORT.md
   cat > "$PROJECT_ROOT/VALIDATION_REPORT.md" <<'EOF'
@@ -142,6 +154,12 @@ EOF
   echo "━━━━━━━━━━ fresh reset complete ━━━━━━━━━━"
   echo ""
 }
+
+# --- Pre-flight: verify environment is ready before burning any Claude calls ---
+if ! bash "$SCRIPT_DIR/init.sh"; then
+  echo "init.sh failed — fix the environment and retry." >&2
+  exit 1
+fi
 
 if [ "$FRESH_START" = true ]; then
   fresh_reset
@@ -233,12 +251,12 @@ run_story_test() {
   local any_found=false
   local all_passed=true
 
-  # Backend test: backend/src/__tests__/<story_id>.test.ts
-  local backend_test="backend/src/__tests__/${story_id}.test.ts"
+  # Backend test: server/src/__tests__/<story_id>.test.ts
+  local backend_test="server/src/__tests__/${story_id}.test.ts"
   if [ -f "$PROJECT_ROOT/$backend_test" ]; then
     any_found=true
     log "Running backend test: $backend_test"
-    if ! (cd "$PROJECT_ROOT" && npx vitest run "$backend_test" --config backend/vitest.config.ts 2>&1 | tee -a "$TEST_LOG"); then
+    if ! (cd "$PROJECT_ROOT" && npx vitest run "$backend_test" --config server/vitest.config.ts 2>&1 | tee -a "$TEST_LOG"); then
       all_passed=false
     fi
   fi
@@ -305,10 +323,21 @@ log "━━━━━━━━━━━━━━━━━━━━━━━━━
 log "  MiniPanel Agent Harness"
 log "  Mode:   $MODE"
 log "  Branch: $BRANCH"
-log "  Models: coder=$MODEL_CODER validator=$MODEL_VALIDATOR"
+log "  Models: orchestrator=$MODEL_ORCHESTRATOR validator=$MODEL_VALIDATOR coder=$MODEL_CODER reviewer=$MODEL_REVIEWER"
 [ "$MAX_ITERATIONS" -gt 0 ] && log "  Max:    $MAX_ITERATIONS iterations"
 log "  Logs:   $LOG_DIR"
 log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+# --- PHASE 0: ORCHESTRATOR — one-shot planner, maps dependencies + mission brief ---
+# Runs once per harness invocation, before any per-story iteration.
+# Skipped in code-only / validate-only debug modes.
+if [ "$MODE" = "full" ]; then
+  ORCHESTRATOR_LOG="$LOG_DIR/orchestrator.log"
+  if ! run_agent "orchestrate" "$MODEL_ORCHESTRATOR" "ORCHESTRATOR" "$ORCHESTRATOR_LOG"; then
+    log "Orchestrator failed — continuing anyway (it's advisory, not blocking)."
+  fi
+  do_git_push
+fi
 
 CURRENT_STORY_ID=""
 CURRENT_STORY_ATTEMPTS=0
@@ -360,12 +389,13 @@ while true; do
 
   # --- Wipe runtime DB so E2E tests get a fresh seeded state ---
   # The backend auto-seeds on empty DB (per BR-102), so removing these files
-  # forces a deterministic starting state each iteration.
-  if [ -f "$PROJECT_ROOT/backend/minipanel.db" ] || [ -f "$PROJECT_ROOT/backend/minipanel.db-wal" ]; then
-    rm -f "$PROJECT_ROOT/backend/minipanel.db" \
-          "$PROJECT_ROOT/backend/minipanel.db-wal" \
-          "$PROJECT_ROOT/backend/minipanel.db-shm"
-    log "Wiped backend/minipanel.db* for clean iteration state."
+  # forces a deterministic starting state each iteration. DB lives at project
+  # root (server/src/db.ts uses __dirname/../../minipanel.db).
+  if [ -f "$PROJECT_ROOT/minipanel.db" ] || [ -f "$PROJECT_ROOT/minipanel.db-wal" ]; then
+    rm -f "$PROJECT_ROOT/minipanel.db" \
+          "$PROJECT_ROOT/minipanel.db-wal" \
+          "$PROJECT_ROOT/minipanel.db-shm"
+    log "Wiped minipanel.db* at project root for clean iteration state."
   fi
 
   # --- PHASE 1: VALIDATOR — writes test for the current story (no-op if test already exists) ---
@@ -384,6 +414,17 @@ while true; do
     if ! run_agent "code" "$MODEL_CODER" "CODER" "$CODER_LOG"; then
       log "Coder failed entirely. Stopping."
       break
+    fi
+    do_git_push
+  fi
+
+  # --- PHASE 2.5: REVIEWER — advisory code review, writes REVIEW_REPORT.md ---
+  # Does NOT block the test run; findings are a guardrail for the coder's next
+  # retry if this iteration's test fails.
+  if [ "$MODE" = "full" ]; then
+    REVIEWER_LOG="$LOG_DIR/iteration-${ITER_PAD}-reviewer.log"
+    if ! run_agent "review" "$MODEL_REVIEWER" "REVIEWER" "$REVIEWER_LOG"; then
+      log "Reviewer failed — continuing to test anyway (reviewer is advisory)."
     fi
     do_git_push
   fi
