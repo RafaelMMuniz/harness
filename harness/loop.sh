@@ -31,8 +31,8 @@ cd "$PROJECT_ROOT"
 
 # --- Configuration ---
 MAX_ITERATIONS=0                  # 0 = unlimited
-MAX_CONSECUTIVE_FAILURES=3        # Stop after N failed validations with no progress
-MAX_AGENT_RETRIES=100              # Re-invoke agent if CLI exits non-zero
+MAX_ATTEMPTS_PER_STORY=5          # Abandon a story after this many failed coder passes and move on
+MAX_AGENT_RETRIES=100             # Re-invoke agent if CLI exits non-zero
 MODEL_CODER="opus"
 MODEL_VALIDATOR="opus"
 BRANCH=$(git branch --show-current 2>/dev/null || echo "main")
@@ -113,15 +113,13 @@ EOF
 
 ## Known Issues
 
-(none yet)
 
 ## Decisions
 
-(none yet)
 EOF
   echo "  - Reset IMPLEMENTATION_PLAN.md"
 
-  # 6. Reset AGENTS.md
+  # 5. Reset AGENTS.md
   cat > "$PROJECT_ROOT/AGENTS.md" <<'EOF'
 ## Build & Run
 
@@ -201,12 +199,6 @@ run_agent() {
   return 1
 }
 
-# --- Check validation verdict ---
-check_verdict() {
-  bash "$SCRIPT_DIR/check_validation.sh" "$PROJECT_ROOT/VALIDATION_REPORT.md"
-  return $?
-}
-
 # --- Git operations ---
 do_git_push() {
   if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
@@ -214,6 +206,95 @@ do_git_push() {
     git push -u origin "$BRANCH" 2>/dev/null || \
     log "Push failed (non-fatal, continuing)"
   fi
+}
+
+# --- Pick the current story (highest-priority `passes: false`, priority >= 1) ---
+# Echoes: <story_id>\t<title>
+#
+# NOTE: We only pick stories with priority >= 1. Negative-priority stories
+# (US-T00..US-T08) in the legacy prd.json were "write test scaffolding" tasks
+# owned by the old Phase-1 coder. In the new design, the validator sets up
+# test infrastructure implicitly on its first run (playwright.config.ts,
+# test helpers, etc.). Those stories can stay in prd.json but the harness
+# ignores them.
+pick_current_story() {
+  jq -r '
+    [.userStories[] | select(.passes == false) | select(.priority >= 1)]
+    | sort_by(.priority)
+    | .[0]
+    | if . then "\(.id)\t\(.title)" else "" end
+  ' prd.json 2>/dev/null
+}
+
+# --- Run the current story's test, return 0 if passing ---
+# Expects: $1 = story_id
+run_story_test() {
+  local story_id="$1"
+  local any_found=false
+  local all_passed=true
+
+  # Backend test: backend/src/__tests__/<story_id>.test.ts
+  local backend_test="backend/src/__tests__/${story_id}.test.ts"
+  if [ -f "$PROJECT_ROOT/$backend_test" ]; then
+    any_found=true
+    log "Running backend test: $backend_test"
+    if ! (cd "$PROJECT_ROOT" && npx vitest run "$backend_test" --config backend/vitest.config.ts 2>&1 | tee -a "$TEST_LOG"); then
+      all_passed=false
+    fi
+  fi
+
+  # E2E test: e2e/<story_id>.spec.ts
+  local e2e_test="e2e/${story_id}.spec.ts"
+  if [ -f "$PROJECT_ROOT/$e2e_test" ]; then
+    any_found=true
+    log "Running E2E test: $e2e_test"
+    if ! (cd "$PROJECT_ROOT" && npx playwright test "$e2e_test" 2>&1 | tee -a "$TEST_LOG"); then
+      all_passed=false
+    fi
+  fi
+
+  if [ "$any_found" = false ]; then
+    log "No test file found for $story_id (expected $backend_test or $e2e_test)"
+    return 1  # treat no test as fail — validator should have written one
+  fi
+  if [ "$all_passed" = true ]; then
+    return 0
+  fi
+  return 1
+}
+
+# --- Flip passes:true for the given story in prd.json ---
+flip_passes_true() {
+  local story_id="$1"
+  local tmp="$(mktemp)"
+  jq --arg id "$story_id" '
+    .userStories |= map(if .id == $id then .passes = true else . end)
+  ' prd.json > "$tmp" && mv "$tmp" prd.json
+
+  git add prd.json
+  git commit -m "[harness] $story_id passes — flipped passes:true after test run" 2>/dev/null || true
+}
+
+# --- Regenerate VALIDATION_REPORT.md with test outcome for current story ---
+# $1=story_id, $2=outcome (PASS|FAIL), $3=attempts_remaining
+write_validation_report() {
+  local story_id="$1"
+  local outcome="$2"
+  local attempts_left="$3"
+  cat > "$PROJECT_ROOT/VALIDATION_REPORT.md" <<EOF
+# Validation Report
+
+## Verdict: $outcome
+
+## Current Story: $story_id
+## Attempts Remaining: $attempts_left
+
+## Summary
+
+Harness ran the test(s) for $story_id after the coder's latest implementation. Result: **$outcome**.
+
+Failure output (if any) is in the latest \`harness/logs/iteration-*-test.log\`. The next coder iteration should read that log — NOT the test source file — to understand what failed.
+EOF
 }
 
 # ================================================================
@@ -229,6 +310,9 @@ log "  Models: coder=$MODEL_CODER validator=$MODEL_VALIDATOR"
 log "  Logs:   $LOG_DIR"
 log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
+CURRENT_STORY_ID=""
+CURRENT_STORY_ATTEMPTS=0
+
 while true; do
   # --- Check iteration limit ---
   if [ "$MAX_ITERATIONS" -gt 0 ] && [ "$ITERATION" -ge "$MAX_ITERATIONS" ]; then
@@ -236,10 +320,33 @@ while true; do
     break
   fi
 
-  # --- Check consecutive failure limit ---
-  if [ "$CONSECUTIVE_FAILURES" -ge "$MAX_CONSECUTIVE_FAILURES" ]; then
-    log "STUCK: $CONSECUTIVE_FAILURES consecutive validation failures with no progress."
-    log "Review VALIDATION_REPORT.md and IMPLEMENTATION_PLAN.md manually."
+  # --- Pick the current story ---
+  STORY_LINE="$(pick_current_story)"
+  if [ -z "$STORY_LINE" ]; then
+    ELAPSED=$(( $(date +%s) - STARTED_AT ))
+    log ""
+    log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    log "  ALL STORIES PASSING. Project complete."
+    log "  Iterations: $ITERATION"
+    log "  Time: $((ELAPSED / 60))m $((ELAPSED % 60))s"
+    log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    break
+  fi
+
+  STORY_ID="${STORY_LINE%%$'\t'*}"
+  STORY_TITLE="${STORY_LINE#*$'\t'}"
+
+  # Reset attempts counter when we move to a new story
+  if [ "$STORY_ID" != "$CURRENT_STORY_ID" ]; then
+    CURRENT_STORY_ID="$STORY_ID"
+    CURRENT_STORY_ATTEMPTS=0
+  fi
+
+  CURRENT_STORY_ATTEMPTS=$((CURRENT_STORY_ATTEMPTS + 1))
+
+  if [ "$CURRENT_STORY_ATTEMPTS" -gt "$MAX_ATTEMPTS_PER_STORY" ]; then
+    log "BLOCKED: $STORY_ID failed $MAX_ATTEMPTS_PER_STORY attempts. Leaving passes:false and stopping."
+    log "Review VALIDATION_REPORT.md, the test file for $STORY_ID, and the latest coder log manually."
     break
   fi
 
@@ -248,12 +355,12 @@ while true; do
   ITER_START=$(date +%s)
 
   log ""
-  log "======================== ITERATION $ITERATION ========================"
+  log "======================== ITERATION $ITERATION — $STORY_ID (attempt $CURRENT_STORY_ATTEMPTS/$MAX_ATTEMPTS_PER_STORY) ========================"
+  log "Story: $STORY_TITLE"
 
   # --- Wipe runtime DB so E2E tests get a fresh seeded state ---
   # The backend auto-seeds on empty DB (per BR-102), so removing these files
-  # forces a deterministic starting state each iteration and eliminates stale-data
-  # test failures caused by accumulation across runs.
+  # forces a deterministic starting state each iteration.
   if [ -f "$PROJECT_ROOT/backend/minipanel.db" ] || [ -f "$PROJECT_ROOT/backend/minipanel.db-wal" ]; then
     rm -f "$PROJECT_ROOT/backend/minipanel.db" \
           "$PROJECT_ROOT/backend/minipanel.db-wal" \
@@ -261,17 +368,7 @@ while true; do
     log "Wiped backend/minipanel.db* for clean iteration state."
   fi
 
-  # --- PHASE 1: CODER ---
-  if [ "$MODE" != "validate-only" ]; then
-    CODER_LOG="$LOG_DIR/iteration-${ITER_PAD}-coder.log"
-    if ! run_agent "code" "$MODEL_CODER" "CODER" "$CODER_LOG"; then
-      log "Coder failed entirely. Stopping."
-      break
-    fi
-    do_git_push
-  fi
-
-  # --- PHASE 2: VALIDATOR ---
+  # --- PHASE 1: VALIDATOR — writes test for the current story (no-op if test already exists) ---
   if [ "$MODE" != "code-only" ]; then
     VALIDATOR_LOG="$LOG_DIR/iteration-${ITER_PAD}-validator.log"
     if ! run_agent "validate" "$MODEL_VALIDATOR" "VALIDATOR" "$VALIDATOR_LOG"; then
@@ -281,69 +378,44 @@ while true; do
     do_git_push
   fi
 
-  # --- PHASE 3: CHECK VERDICT ---
-  if [ "$MODE" = "code-only" ]; then
-    log "Code-only mode; skipping verdict check."
+  # --- PHASE 2: CODER — implements to make the test pass ---
+  if [ "$MODE" != "validate-only" ]; then
+    CODER_LOG="$LOG_DIR/iteration-${ITER_PAD}-coder.log"
+    if ! run_agent "code" "$MODEL_CODER" "CODER" "$CODER_LOG"; then
+      log "Coder failed entirely. Stopping."
+      break
+    fi
+    do_git_push
+  fi
+
+  # --- PHASE 3: HARNESS RUNS THE TEST ---
+  if [ "$MODE" = "code-only" ] || [ "$MODE" = "validate-only" ]; then
+    log "$MODE mode; skipping test run."
     continue
   fi
 
-  check_verdict
-  verdict=$?
+  TEST_LOG="$LOG_DIR/iteration-${ITER_PAD}-test.log"
+  : > "$TEST_LOG"
+  if run_story_test "$STORY_ID"; then
+    log "Test PASSED for $STORY_ID — flipping passes:true"
+    flip_passes_true "$STORY_ID"
+    write_validation_report "$STORY_ID" "PASS" "$((MAX_ATTEMPTS_PER_STORY - CURRENT_STORY_ATTEMPTS))"
+    ITER_PASSED=true
+    CURRENT_STORY_ID=""  # force next iteration to pick the next story
+  else
+    log "Test FAILED for $STORY_ID — coder will retry next iteration"
+    write_validation_report "$STORY_ID" "FAIL" "$((MAX_ATTEMPTS_PER_STORY - CURRENT_STORY_ATTEMPTS))"
+    ITER_PASSED=false
+  fi
 
-  case $verdict in
-    0)  # PASS
-      log "Validation PASSED. Coder will pick next requirement."
-      CONSECUTIVE_FAILURES=0
-      ITER_PASSED=true
-      ;;
-    2)  # DONE
-      ITER_PASSED=true
-      ELAPSED=$(( $(date +%s) - STARTED_AT ))
-      log ""
-      log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-      log "  ALL REQUIREMENTS MET. Project complete."
-      log "  Iterations: $ITERATION"
-      log "  Time: $((ELAPSED / 60))m $((ELAPSED % 60))s"
-      log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-      ;;
-    *)  # FAIL
-      CONSECUTIVE_FAILURES=$((CONSECUTIVE_FAILURES + 1))
-      ITER_PASSED=false
-      log "Validation FAILED ($CONSECUTIVE_FAILURES/$MAX_CONSECUTIVE_FAILURES consecutive)."
-      log "Coder will read the report and fix issues next iteration."
-      ;;
-  esac
+  git add VALIDATION_REPORT.md 2>/dev/null && git commit -m "[harness] iteration $ITERATION: $STORY_ID $([ "$ITER_PASSED" = true ] && echo PASS || echo FAIL)" 2>/dev/null || true
+  do_git_push
 
   # ── Monitor reporting ──────────────────────────────────────
   ITER_DURATION=$(( $(date +%s) - ITER_START ))
-
-  # Story info (current story being attempted)
-  STORY_ID=$(jq -r '[.userStories[] | select(.passes == false)] | sort_by(.priority) | .[0].id // empty' prd.json 2>/dev/null)
-  STORY_TITLE=$(jq -r '[.userStories[] | select(.passes == false)] | sort_by(.priority) | .[0].title // empty' prd.json 2>/dev/null)
-
-  # Token counts from coder + validator logs. parse_stream.js emits a STATS
-  # footer line (e.g. `STATS input_tokens:123 output_tokens:45 cache_read:6 ...`)
-  # that these greps pick up.
-  CODER_LOG="$LOG_DIR/iteration-${ITER_PAD}-coder.log"
-  VALIDATOR_LOG="$LOG_DIR/iteration-${ITER_PAD}-validator.log"
-  parse_stat() {
-    # $1 = field name, $2+ = log files; sums the field across all logs.
-    local field="$1"; shift
-    local total=0 val
-    for f in "$@"; do
-      [ -f "$f" ] || continue
-      val=$(grep -oE "${field}:[0-9]+" "$f" 2>/dev/null | grep -oE '[0-9]+$' | tail -1)
-      total=$((total + ${val:-0}))
-    done
-    echo "$total"
-  }
-  INPUT_TOKENS=$(parse_stat 'input_tokens' "$CODER_LOG" "$VALIDATOR_LOG")
-  OUTPUT_TOKENS=$(parse_stat 'output_tokens' "$CODER_LOG" "$VALIDATOR_LOG")
-  CACHE_READ=$(parse_stat 'cache_read' "$CODER_LOG" "$VALIDATOR_LOG")
-  CACHE_WRITE=$(parse_stat 'cache_write' "$CODER_LOG" "$VALIDATOR_LOG")
-  # cost is a float — sum with awk
-  COST=$(awk 'BEGIN{s=0} /STATS .* cost_usd:/ {match($0,/cost_usd:[0-9.]+/); if(RSTART){v=substr($0,RSTART+9,RLENGTH-9); s+=v}} END{printf "%.6f", s}' \
-    "$CODER_LOG" "$VALIDATOR_LOG" 2>/dev/null || echo 0)
+  INPUT_TOKENS=$(grep -oE 'input_tokens[": ]+[0-9]+' "$CODER_LOG" 2>/dev/null | grep -oE '[0-9]+' | tail -1)
+  OUTPUT_TOKENS=$(grep -oE 'output_tokens[": ]+[0-9]+' "$CODER_LOG" 2>/dev/null | grep -oE '[0-9]+' | tail -1)
+  CACHE_READ=$(grep -oE 'cache_read[": ]+[0-9]+' "$CODER_LOG" 2>/dev/null | grep -oE '[0-9]+' | tail -1)
 
   curl -s --max-time 5 -X POST "$MONITOR_URL" \
     -H 'Content-Type: application/json' \
@@ -355,15 +427,12 @@ while true; do
       \"input_tokens\": ${INPUT_TOKENS:-0},
       \"output_tokens\": ${OUTPUT_TOKENS:-0},
       \"cache_read_tokens\": ${CACHE_READ:-0},
-      \"cache_write_tokens\": ${CACHE_WRITE:-0},
+      \"cache_write_tokens\": 0,
       \"duration_seconds\": $ITER_DURATION,
       \"passed\": $ITER_PASSED,
-      \"cost\": ${COST:-0}
+      \"cost\": 0
     }" > /dev/null 2>&1 || true
   # ──────────────────────────────────────────────────────────
-
-  # Break after reporting if DONE
-  [ "$verdict" -eq 2 ] 2>/dev/null && break
 done
 
 log ""
