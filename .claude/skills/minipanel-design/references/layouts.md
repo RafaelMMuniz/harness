@@ -12,9 +12,11 @@ Fixed left navigation, always visible.
     MiniPanel
   </div>
   <nav className="flex-1 px-2 space-y-1" role="navigation">
-    <a className="flex items-center h-10 px-4 rounded-lg text-sm font-bold text-neutral-300
+    <a
+      className="flex items-center h-10 px-4 rounded-lg text-sm font-bold text-neutral-300
                    hover:bg-neutral-800
-                   [&.active]:bg-neutral-700 [&.active]:text-neutral-50">
+                   [&.active]:bg-neutral-700 [&.active]:text-neutral-50"
+    >
       Events
     </a>
     {/* Repeat for: Trends, Funnels, Users */}
@@ -81,18 +83,21 @@ Filter bar with dropdowns, then a full-width data table with expandable rows and
 
 ## 2. Trends / Insights (BR-201, BR-300, BR-301, BR-302)
 
-Dense control bar with all query parameters, chart panel with warm background, optional summary metric cards.
+Cascading control bar, chart panel with warm background, optional summary metric cards.
+
+Controls cascade top-to-bottom: selecting an event determines which properties appear in downstream selectors. Measure determines whether a property picker is needed. This prevents dead views from nonsensical filter combinations.
 
 ```
 ┌──────────┬──────────────────────────────────────────────────┐
 │          │  Trends                                          │
 │ MiniPanel│                                                  │
 │          │  ┌──────────────────────────────────────────────┐ │
-│ Events   │  │ [Event ▾] [Measure ▾] [Property ▾]          │ │
-│ Trends ← │  │ [Break down by ▾]                            │ │
+│ Events   │  │ [Event ▾]  [Measure ▾]  [of property ▾]*    │ │
+│ Trends ← │  │ [Break down by ▾]*                           │ │
 │ Funnels  │  │ [7d] [30d] [90d] [Custom]  [Day|Week]       │ │
 │ Users    │  │                      [Line|Bar|Area]         │ │
 │          │  └──────────────────────────────────────────────┘ │
+│          │     * only shown when relevant (see below)       │
 │          │                                                  │
 │          │  ┌──────────────────────────────────────────────┐ │
 │          │  │ bg: #FEF9F3                                  │ │
@@ -107,8 +112,17 @@ Dense control bar with all query parameters, chart panel with warm background, o
 └──────────┴──────────────────────────────────────────────────┘
 ```
 
+**Control cascade logic**:
+
+- **Event** — always visible. Populated from `GET /api/events/names`. Selecting an event scopes all downstream selectors to properties seen on that event.
+- **Measure** — always visible. Options: `total count`, `unique users`, `sum`, `avg`, `min`, `max`. Defaults to `total count`.
+- **of property** — only appears when measure is `sum`, `avg`, `min`, or `max` (i.e. needs a numeric property). Options are populated with numeric properties of the selected event.
+- **Break down by** — optional. Only populated with properties of the selected event. Hidden or disabled until an event is chosen.
+- **Date / Granularity / Chart type** — always visible, independent of event selection.
+
 **Structure**:
-1. Controls card — Selects for event, measure, property, breakdown. Button toggle groups for date presets, granularity, chart type.
+
+1. Controls card — Cascading Selects (event → measure → property → breakdown). Button toggle groups for date presets, granularity, chart type.
 2. Chart card — `bg-[#FEF9F3]` container with Recharts `ResponsiveContainer`.
 3. Metric cards row — `grid grid-cols-3 gap-6` of summary metric Cards.
 
@@ -116,54 +130,96 @@ Dense control bar with all query parameters, chart panel with warm background, o
 
 ## 3. Funnel Analysis (BR-303)
 
-Vertical step builder on the left, funnel visualization on the right with conversion annotations.
+Step builder on the left with controls, horizontal funnel visualization below.
 
 ```
 ┌──────────┬──────────────────────────────────────────────────┐
 │          │  Funnel Analysis                                 │
 │ MiniPanel│                                                  │
 │          │  ┌──────────────────────────────────────────────┐ │
-│ Events   │  │ [30d] [90d] [Custom]          [Analyze]      │ │
-│ Trends   │  └──────────────────────────────────────────────┘ │
-│ Funnels← │                                                  │
-│ Users    │  ┌──────────────┬───────────────────────────────┐ │
-│          │  │ Steps        │  Results                      │ │
-│          │  │              │                               │ │
-│          │  │ 1 [Event ▾]  │  ████████████████████  2,410  │ │
-│          │  │              │         100%                  │ │
-│          │  │ 2 [Event ▾]  │            ↓ 35% drop-off    │ │
-│          │  │              │  █████████████         1,567  │ │
-│          │  │ 3 [Event ▾]  │          65%                  │ │
-│          │  │              │            ↓ 52% drop-off     │ │
-│          │  │ [+ Add step] │  ██████                  749  │ │
-│          │  │              │          31%                  │ │
-│          │  │              │                               │ │
-│          │  │              │  Overall: 31% converted       │ │
-│          │  └──────────────┴───────────────────────────────┘ │
+│ Events   │  │ Steps                                        │ │
+│ Trends   │  │                                              │ │
+│ Funnels← │  │ 1 [Event ▾]  2 [Event ▾]  3 [Event ▾]      │ │
+│ Users    │  │                            [+ Add step]      │ │
+│          │  │──────────────────────────────────────────────│ │
+│          │  │ [30d] [90d] [Custom]             [Analyze]   │ │
+│          │  └──────────────────────────────────────────────┘ │
+│          │                                                  │
+│          │  ┌──────────────────────────────────────────────┐ │
+│          │  │ Results                                      │ │
+│          │  │                                              │ │
+│          │  │  Step 1        Step 2        Step 3          │ │
+│          │  │  Page Viewed   Sign Up       Purchase        │ │
+│          │  │  ██████████    ███████       ████            │ │
+│          │  │  2,410         1,567         749             │ │
+│          │  │  100%     →    65%      →    31%             │ │
+│          │  │        35% drop    52% drop                  │ │
+│          │  │                                              │ │
+│          │  │  Overall: 31% converted                      │ │
+│          │  └──────────────────────────────────────────────┘ │
 └──────────┴──────────────────────────────────────────────────┘
 ```
 
 **Structure**:
-1. Controls card — Date preset toggle + Analyze button.
-2. Split card — Left column: numbered step Selects with "+ Add step" button. Right column: horizontal bars in `#FF7F11` with conversion percentages and drop-off annotations between steps. Overall conversion at the bottom.
+
+1. Steps card — Top row: numbered step Selects laid out horizontally with "+ Add step" button at the end. Below a divider: date preset toggles and Analyze button.
+2. Results card — Horizontal funnel: vertical bars side by side (tallest on the left, shrinking right), each labeled with event name, count, and conversion %. Drop-off annotations between bars. Overall conversion at the bottom.
 
 ---
 
-## 4. User Profile (BR-304)
+## 4. Users (BR-304)
 
-Search bar at top, identity cluster card, then chronological event timeline.
+Two-level view: a searchable users table, then a user profile detail after clicking a row.
+
+### 4a. Users List (default)
+
+Search/filter bar at top, then a full-width table of all known users with pagination.
 
 ```
 ┌──────────┬──────────────────────────────────────────────────┐
 │          │  Users                                           │
 │ MiniPanel│                                                  │
 │          │  ┌──────────────────────────────────────────────┐ │
-│ Events   │  │ [Search user or device ID...        ] [Go]   │ │
-│ Trends   │  └──────────────────────────────────────────────┘ │
-│ Funnels  │                                                  │
-│ Users  ← │  ┌──────────────────────────────────────────────┐ │
-│          │  │ Identity Cluster                              │ │
-│          │  │                                               │ │
+│ Events   │  │ [Search user or device ID...           ]     │ │
+│ Trends   │  │  ┌────────────────────────────────────────┐  │ │
+│ Funnels  │  │  │ charlie@example.com          user      │  │ │
+│ Users  ← │  │  │ dev-c8a3f1                   device    │  │ │
+│          │  │  │ charlie_mobile               device    │  │ │
+│          │  │  └────────────────────────────────────────┘  │ │
+│          │  └──────────────────────────────────────────────┘ │
+│          │                                                  │
+│          │  ┌──────────────────────────────────────────────┐ │
+│          │  │ User ID          Devices  Events  Last seen  │ │
+│          │  │──────────────────────────────────────────────│ │
+│          │  │ charlie@ex…      2        847     Apr 13     │ │
+│          │  │ alice@ex…        1        312     Apr 12     │ │
+│          │  │ dev-f9a021       —          45    Apr 11     │ │
+│          │  │ bob@ex…          3        1,204   Apr 10     │ │
+│          │  │ ...                                          │ │
+│          │  │──────────────────────────────────────────────│ │
+│          │  │              [← Prev]  Page 1 of 5  [Next →] │ │
+│          │  └──────────────────────────────────────────────┘ │
+└──────────┴──────────────────────────────────────────────────┘
+```
+
+**Structure**:
+
+1. Search card — Autocomplete input. Typing 2+ characters queries `GET /api/users/search?q=<term>` and shows a dropdown of matching user_ids and device_ids (labeled "user" or "device"). Selecting a result navigates directly to that user's profile. Pressing Enter or leaving the input filters the table below.
+2. Users table card — Columns: User ID, Devices (count of linked devices), Events (total count), Last seen. Rows are clickable. Unresolved devices (no user mapping) appear with their device_id directly. Pagination at the bottom.
+
+### 4b. User Profile (after clicking a row)
+
+Identity cluster card, then chronological event timeline. Back link returns to the users table.
+
+```
+┌──────────┬──────────────────────────────────────────────────┐
+│          │  [← Back to Users]                               │
+│ MiniPanel│  Users › charlie@example.com                     │
+│          │                                                  │
+│ Events   │                                                  │
+│ Trends   │  ┌──────────────────────────────────────────────┐ │
+│ Funnels  │  │ Identity Cluster                              │ │
+│ Users  ← │  │                                               │ │
 │          │  │ User      charlie@example.com                 │ │
 │          │  │ Devices   dev-a8f03c  dev-b2e917              │ │
 │          │  │ First     2025-03-15 09:12                    │ │
@@ -187,6 +243,7 @@ Search bar at top, identity cluster card, then chronological event timeline.
 ```
 
 **Structure**:
-1. Search card — Input + "Go" Button.
+
+1. Breadcrumb header — "Users › {user_id}" with a "Back to Users" link.
 2. Identity cluster card — Key-value pairs: user identity, device identities (as Badges), first/last seen, event count.
 3. Timeline card — Chronological list of events with timestamps, event names, device source, and expandable properties. "Load more" button at bottom. Mark merged anonymous events with a visual indicator.
