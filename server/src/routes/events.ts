@@ -1,6 +1,12 @@
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { db } from '../db.js';
+import {
+  resolveIdentity,
+  getEventsForUser,
+  parseEventRow,
+  type EventRow,
+} from '../identity.js';
 
 const eventBodySchema = z
   .object({
@@ -167,4 +173,46 @@ eventsRouter.post('/events/batch', (req: Request, res: Response) => {
   runBatch();
 
   res.status(200).json({ accepted, errors });
+});
+
+eventsRouter.get('/events', (req: Request, res: Response) => {
+  const userId = req.query.user_id as string | undefined;
+  const deviceId = req.query.device_id as string | undefined;
+
+  if (userId) {
+    // Resolve and return all events for this user (identity-aware)
+    const events = getEventsForUser(userId);
+    res.json(events);
+    return;
+  }
+
+  if (deviceId) {
+    // Resolve the device to a user (if mapping exists), then return all events
+    // for the resolved identity
+    const resolvedId = resolveIdentity(deviceId);
+
+    // If the device resolved to a user_id (mapping exists), get all events for
+    // that user. If no mapping exists, resolvedId === deviceId — fall back to
+    // returning just events with this device_id.
+    if (resolvedId !== deviceId) {
+      const events = getEventsForUser(resolvedId);
+      res.json(events);
+    } else {
+      // Unmapped device — return events for just this device_id
+      const rows = db
+        .prepare(
+          'SELECT * FROM events WHERE device_id = ? ORDER BY timestamp ASC',
+        )
+        .all(deviceId) as EventRow[];
+      res.json(rows.map(parseEventRow));
+    }
+    return;
+  }
+
+  // No filter — return all events sorted by timestamp ascending
+  const rows = db
+    .prepare('SELECT * FROM events ORDER BY timestamp ASC')
+    .all() as EventRow[];
+
+  res.json(rows.map(parseEventRow));
 });

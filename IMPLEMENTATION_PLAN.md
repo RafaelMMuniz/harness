@@ -20,6 +20,9 @@ _(none active)_
 
 ## Decisions
 
+### [iter-10] 2026-04-15 — US-005 identity resolution query logic
+Created `server/src/identity.ts` with three exports: `resolveIdentity(deviceOrUserId)` looks up `identity_mappings` to map device→user (returns input as-is if no mapping), `getEventsForUser(userId)` uses the SQL pattern `WHERE user_id = ? OR device_id IN (SELECT device_id FROM identity_mappings WHERE user_id = ?)` to retroactively merge all events for a resolved user, and `parseEventRow()` converts DB rows to API shape (parsed properties). Added `GET /api/events` route in `events.ts` with `user_id` and `device_id` query params — both use identity resolution. For unmapped devices, falls back to direct `WHERE device_id = ?` query since `getEventsForUser` is designed for user_ids. All responses sorted by timestamp ASC with properties as parsed JSON objects.
+
 ### [iter-9] 2026-04-15 — US-004 fix: JSON body size limit for large batches
 Express `express.json()` defaults to 100KB body limit. A batch of 1000 events exceeds this, causing the server to return 413 (Payload Too Large) before the route handler runs. Fixed by setting `express.json({ limit: '10mb' })` in `server/src/index.ts`.
 
