@@ -20,6 +20,9 @@ _(none active)_
 
 ## Decisions
 
+### [iter-8] 2026-04-15 — US-004 batch event ingestion endpoint
+Added `POST /api/events/batch` to `server/src/routes/events.ts`. Reuses the same `eventBodySchema` from US-003 for per-event validation. Uses a "wrapper + individual" validation strategy: first validates the outer `{ events: [...] }` shape (array 1–1000) with a loose schema, then validates each event individually. This allows partial success — invalid events are skipped with error details while valid ones are inserted. All inserts happen inside a single `db.transaction()` for performance. Identity conflict detection uses prepared statements inside the transaction loop, checking `identity_mappings` before each insert. Conflicting events are skipped (not inserted) and reported in the errors array without aborting the batch.
+
 ### [iter-7] 2026-04-15 — US-003 event ingestion endpoint
 Created `server/src/routes/events.ts` with POST /api/events handler. Zod validates request body (event required+non-empty, at least one of device_id/user_id). Identity conflict check runs BEFORE event insertion — queries identity_mappings for existing device_id mapping, rejects with 409 if mapped to different user_id. Properties serialized to JSON string for storage, deserialized back to object in response. App exported from `index.ts` with conditional `app.listen()` (skipped under VITEST env) so tests can import without port conflicts.
 

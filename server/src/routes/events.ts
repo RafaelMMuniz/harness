@@ -14,6 +14,14 @@ const eventBodySchema = z
     message: 'At least one of device_id or user_id must be present',
   });
 
+// Validates array size but parses events individually for partial-success semantics
+const batchWrapperSchema = z.object({
+  events: z
+    .array(z.unknown())
+    .min(1, 'events array must have at least 1 event')
+    .max(1000, 'events array must have at most 1000 events'),
+});
+
 export const eventsRouter = Router();
 
 eventsRouter.post('/events', (req: Request, res: Response) => {
@@ -86,4 +94,77 @@ eventsRouter.post('/events', (req: Request, res: Response) => {
     timestamp: row.timestamp,
     properties: row.properties ? JSON.parse(row.properties) : null,
   });
+});
+
+eventsRouter.post('/events/batch', (req: Request, res: Response) => {
+  // First validate the wrapper: events must be an array with 1-1000 items
+  const wrapperResult = batchWrapperSchema.safeParse(req.body);
+  if (!wrapperResult.success) {
+    const message = wrapperResult.error.errors.map((e) => e.message).join('; ');
+    res.status(400).json({ error: message });
+    return;
+  }
+
+  const rawEvents = wrapperResult.data.events;
+  const errors: Array<{ index: number; message: string }> = [];
+  let accepted = 0;
+
+  const insertEvent = db.prepare(
+    'INSERT INTO events (event_name, device_id, user_id, timestamp, properties) VALUES (?, ?, ?, ?, ?)',
+  );
+  const getMapping = db.prepare(
+    'SELECT user_id FROM identity_mappings WHERE device_id = ?',
+  );
+  const insertMapping = db.prepare(
+    'INSERT OR IGNORE INTO identity_mappings (device_id, user_id, created_at) VALUES (?, ?, ?)',
+  );
+
+  const runBatch = db.transaction(() => {
+    for (let i = 0; i < rawEvents.length; i++) {
+      // Validate each event individually
+      const eventResult = eventBodySchema.safeParse(rawEvents[i]);
+      if (!eventResult.success) {
+        const message = eventResult.error.errors.map((e) => e.message).join('; ');
+        errors.push({ index: i, message });
+        continue;
+      }
+
+      const { event, device_id, user_id, properties } = eventResult.data;
+      const timestamp = eventResult.data.timestamp || new Date().toISOString();
+
+      // Check for identity conflict
+      if (device_id && user_id) {
+        const existing = getMapping.get(device_id) as { user_id: string } | undefined;
+        if (existing && existing.user_id !== user_id) {
+          errors.push({
+            index: i,
+            message: 'device_id is already mapped to a different user',
+          });
+          continue;
+        }
+      }
+
+      const serializedProps =
+        properties != null ? JSON.stringify(properties) : null;
+
+      insertEvent.run(
+        event,
+        device_id ?? null,
+        user_id ?? null,
+        timestamp,
+        serializedProps,
+      );
+
+      // Create identity mapping when both IDs present
+      if (device_id && user_id) {
+        insertMapping.run(device_id, user_id, new Date().toISOString());
+      }
+
+      accepted++;
+    }
+  });
+
+  runBatch();
+
+  res.status(200).json({ accepted, errors });
 });
