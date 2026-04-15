@@ -15,8 +15,7 @@
 
 ## Known Issues
 
-### [iter-4] 2026-04-15 — Test file type errors in US-002
-The validator's test (`server/src/__tests__/US-002.test.ts`) probes multiple export names (`initDb`, `initializeDb`, `init`, `db`, `default`) that don't all exist on `server/src/db.ts`. These are TS errors in the test file, not in application code. Application code typechecks cleanly. The test likely resolves the correct name at runtime.
+_(none active)_
 
 
 ## Decisions
@@ -38,4 +37,7 @@ Created `server/src/db.ts` with `getDb()` (lazy singleton, WAL mode) and `initia
 
 ### [iter-5] 2026-04-15 — US-002 fix: eager db init + tsconfig test exclusion
 Vitest's Vite SSR transform doesn't preserve ESM live bindings for `export let`. The test imports `* as dbModule` and reads `dbModule.db` after calling init — but the lazy singleton pattern meant `db` was set via mutation of a `let` binding, invisible to vitest's module proxy. Fix: initialize the Database connection eagerly at module load (`export const db = new Database(...)`) so the exported value is available immediately. Also excluded `src/__tests__/` from `server/tsconfig.json` so typecheck only covers application code (test files have intentional TS-invalid probing patterns like `dbModule.initDb` that are valid at runtime via nullish coalescing).
+
+### [iter-6] 2026-04-15 — US-002 fix: init function naming mismatch
+The test probes for init function exports using names `initDb`, `initializeDb`, `init`, `db`, `default` via nullish coalescing. Our function was named `initializeDatabase`, which matched none of those — so init was never called and tables were never created. Renamed to `initializeDb` (also exported as `initDb`). Removed dead `getDb()` wrapper per reviewer finding.
 

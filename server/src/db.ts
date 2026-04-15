@@ -6,11 +6,7 @@ export const DB_PATH = path.resolve('minipanel.db');
 export const db: Database.Database = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
 
-export function getDb(): Database.Database {
-  return db;
-}
-
-export function initializeDatabase(): void {
+export function initializeDb(): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS events (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -33,3 +29,5 @@ export function initializeDatabase(): void {
 
   console.log('Database initialized successfully');
 }
+
+export { initializeDb as initDb };
