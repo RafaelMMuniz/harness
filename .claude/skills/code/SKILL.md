@@ -77,6 +77,20 @@ This is the most important rule in this skill. The harness derives its value fro
 ### Exception: fixing validation failures
 When VALIDATION_REPORT.md shows FAIL, rule 1 applies. You may fix multiple CRITICAL/HIGH failures in one iteration if they're clearly related (e.g., all caused by the same bug) — but prefer focused commits. The one-story rule is about NEW work, not about fix batches.
 
+### Exception: Phase 1 batching
+
+Phase 1 stories (negative priority — US-T00 through US-T08) are **test-authoring only**. They create Playwright spec files that cannot execute until Phase 2 bootstraps the backend and frontend. Validating them one-at-a-time is pure waste: the validator can only re-run `tsc --noEmit -p tsconfig.e2e.json` and `playwright test --list` — identical checks every time.
+
+**Rule for Phase 1:** in a single iteration, work through every Phase 1 story with `passes: false` in priority order (most negative first). For each story:
+1. Write its spec files per acceptance criteria.
+2. Run `tsc --noEmit -p tsconfig.e2e.json` and `playwright test --list` to confirm the files compile.
+3. Mark `passes: true` in prd.json for that story.
+4. Continue to the next Phase 1 story.
+
+At the end of the iteration, commit once with a message like `[coder] Phase 1 test-authoring: US-T00..US-T08` (list the range or exact IDs you completed).
+
+The Iron Rule of one-story-per-iteration resumes the moment ANY priority ≥ 1 story is in play. Do NOT use this batching for Phase 2 — those stories have real dependencies and real runtime behavior; per-story validation matters there.
+
 ### The psychological trap
 You will be tempted to "just keep going" after finishing one story because you have context, the code is fresh, and it feels efficient. **Resist this.** The harness will invoke you again with equally rich context thanks to your logs and updated plan files. Each iteration is a natural checkpoint. Fight the urge to ship a mega-commit.
 

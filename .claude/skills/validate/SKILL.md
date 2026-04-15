@@ -84,6 +84,15 @@ If you cannot run tests because the project isn't bootstrapped yet (no package.j
 
 ### Step 4: Write the Validation Report
 
+**Hard length cap: ≤ 40 lines, ≤ 800 tokens.** The coder reads this file every iteration; bloat burns their context. Stick to the template. The git log and prd.json already carry history — do not repeat them here.
+
+#### Sections you MUST NOT write
+
+- `Tests Not Run` / `Blocked Tests` — the coder knows the project state from the filesystem. Listing what didn't run adds no signal.
+- `Priority Guidance for Next Coder Iteration` / `Next Steps` / `Recommendations` — prd.json priorities already tell the coder what to do next. This is the coder's job to determine, not yours.
+- Prose paragraphs explaining what the coder should do. Report findings, not advice.
+- Duplication of acceptance criteria text from prd.json.
+
 Overwrite `VALIDATION_REPORT.md` completely with this format:
 
 ```
@@ -92,35 +101,30 @@ Overwrite `VALIDATION_REPORT.md` completely with this format:
 ## Verdict: PASS | FAIL | DONE
 
 ## Summary
-One paragraph: what was tested, what passed, what failed, overall assessment.
+<Two sentences max. Sentence 1: what changed this iteration. Sentence 2: why the verdict is what it is.>
 
-## Test Results
-
-### Passing Tests
-- [test name]: what it verifies (BR-XXX)
-
-### Failing Tests
-- **[CRITICAL]** [test name]: Expected X, got Y. Violates BR-XXX.
-- **[HIGH]** [test name]: Expected X, got Y. Violates BR-XXX.
-- **[MEDIUM]** [test name]: Expected X, got Y. Spec recommends but does not require.
-- **[LOW]** [test name]: Minor issue, not spec-violating.
+## Failing Tests
+- **[CRITICAL]** <test name>: <what failed, ≤ 2 lines>
+- **[HIGH]** <test name>: <what failed, ≤ 2 lines>
+- **[MEDIUM]** <test name>: <what failed>
+- **[LOW]** <test name>: <minor>
 
 ## Coverage Gaps
-Requirements from prd.json that have no test coverage yet:
-- BR-XXX: [what needs testing]
+<≤ 3 bullets. Only genuine gaps that block the verdict. Omit when empty.>
 
 ## Stories Validated
-
-List by prd.json story ID, not BR number. For each story where coder claimed `passes: true`, report whether tests confirm it:
-
-- US-XXX: CONFIRMED | LYING (tests fail) | UNVERIFIABLE (no tests yet)
-
-If you find any story marked `passes: true` in prd.json that does NOT hold up under tests, call it out as a LYING entry. The coder violated protocol by prematurely setting passes.
+<One line per story. No prose. Examples below:>
+- US-T00: CONFIRMED
+- US-001: LYING — backend/package.json missing
+- US-003: UNVERIFIABLE — no tests yet
 
 ## Coder Integrity Check
-
-Also include a line: "Stories claimed passing in prd.json: N. Stories confirmed: M. Lying claims: N-M."
+Stories claimed passing: N. Confirmed: M. Lying: N-M.
 ```
+
+Optional `## Passing Tests` section: include ONLY on PASS/DONE verdicts to show positive coverage. On FAIL, omit it — the failures are the actionable signal; passing tests are already in the stream log.
+
+**Self-check before writing:** does the report fit on one screen (~40 lines)? If not, you have prose to cut or a Stories Validated line to compress.
 
 ### Verdict Rules
 
