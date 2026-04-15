@@ -83,42 +83,45 @@ No validation has been performed yet. This is the first iteration.
 EOF
   echo "  - Reset VALIDATION_REPORT.md"
 
-  # 4. Reset IMPLEMENTATION_PLAN.md
+  # 4. Reset prd.json — flip every story's passes back to false
+  if [ -f "$PROJECT_ROOT/prd.json" ]; then
+    if command -v jq >/dev/null 2>&1; then
+      jq '.userStories |= map(.passes = false)' "$PROJECT_ROOT/prd.json" > "$PROJECT_ROOT/prd.json.tmp" \
+        && mv "$PROJECT_ROOT/prd.json.tmp" "$PROJECT_ROOT/prd.json"
+      echo "  - Reset prd.json passes -> false for all stories"
+    else
+      echo "  - WARN: jq not found; cannot reset prd.json.passes. Install jq."
+    fi
+  fi
+
+  # 5. Reset IMPLEMENTATION_PLAN.md to minimal skeleton (status lives in prd.json)
   cat > "$PROJECT_ROOT/IMPLEMENTATION_PLAN.md" <<'EOF'
 # Implementation Plan
 
-## Status: NOT STARTED
-
-## Completed
-
-
-## In Progress
-
-
-## Next Up
-
-- BR-100: Event collection
-- BR-101: Identity resolution
-- BR-102: Sample data
-- BR-103: Application shell
-- BR-200: Event exploration
-- BR-201: Trend analysis
-- BR-300: Numeric aggregations
-- BR-301: Comparative visualization
-- BR-302: Dimensional breakdown
-- BR-303: Funnel analysis
-- BR-304: User profiles
-- BR-305: Visual coherence
+> **Status lives in `prd.json`.** Each story has a `passes` field (boolean) — that
+> is the single source of truth for what is and isn't done. Do not track status
+> here.
+>
+> This file exists for two things only:
+> - **Known Issues** — cross-cutting bugs or regressions that don't map to a single
+>   story. Append-only.
+> - **Decisions** — architectural choices made during implementation, with rationale.
+>   Append-only.
+>
+> Never delete or rewrite past entries. Prepend iteration number and date to new
+> entries so chronology is preserved.
 
 ## Known Issues
 
+(none yet)
 
 ## Decisions
 
+(none yet)
 EOF
   echo "  - Reset IMPLEMENTATION_PLAN.md"
 
-  # 5. Reset AGENTS.md
+  # 6. Reset AGENTS.md
   cat > "$PROJECT_ROOT/AGENTS.md" <<'EOF'
 ## Build & Run
 

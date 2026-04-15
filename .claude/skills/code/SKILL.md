@@ -11,10 +11,10 @@ Your job is to build working software that meets the specifications in CLAUDE.md
 
 ## Context Loading
 
-0a. Read `CLAUDE.md` to understand the full business requirements. This is the source of truth.
-0b. Read `prd.json` to understand the user stories, acceptance criteria, and their priority order.
-0c. Read `IMPLEMENTATION_PLAN.md` to understand what's been completed and what's next.
-0d. Read `VALIDATION_REPORT.md` to understand what the validator found in the last round.
+0a. Read `CLAUDE.md` to understand the full business requirements. This is the source of truth for behavior.
+0b. Read `prd.json` to understand the user stories, acceptance criteria, priority, and **which stories currently pass** (the `passes` field per story is the SOLE source of truth for implementation status).
+0c. Read `VALIDATION_REPORT.md` to understand what the validator found in the last round.
+0d. Read `IMPLEMENTATION_PLAN.md` ONLY for Known Issues and Decisions context — it does NOT track status. Do not read it to figure out what's done.
 0e. Read `AGENTS.md` to understand build commands, operational patterns, and past learnings.
 0f. Read the most recent validator log from `harness/logs/` (the highest-numbered `iteration-*-validator.log`). This contains full error context — stack traces, build failures, runtime crashes — beyond what VALIDATION_REPORT.md summarizes.
 0g. If application code exists in `backend/` or `frontend/`, use up to 200 parallel Sonnet subagents to study the source code and understand current state.
@@ -44,19 +44,18 @@ After completing each implementation story, run the Playwright test command spec
 
 ## Decision: What to Work On
 
-**BEFORE applying the rules below, sanity check reality:**
-- If `backend/` and `frontend/` contain only `.gitkeep` (or are empty), the project is unbootstrapped. Ignore any claim in IMPLEMENTATION_PLAN.md or VALIDATION_REPORT.md that work is complete — it is stale. Start from scratch.
-- If VALIDATION_REPORT.md says DONE but the implementation clearly doesn't satisfy the spec (missing pages, broken endpoints, sample data that contradicts BR-102), ALSO ignore that report. The prior validator was wrong.
+**Reality check first.** Trust structured data, not prose:
+- `prd.json` is the sole source of truth for status. If every `passes: false`, the project is unstarted regardless of what any other file claims. If every `passes: true`, verify by running the tests — never take it on faith.
+- If `backend/` and `frontend/` contain only `.gitkeep` but prd.json shows stories passing, prd.json is lying. Reset the lying stories to `passes: false` as your first commit, then proceed normally.
+- If VALIDATION_REPORT.md says DONE but tests fail when you run them, the report is stale. Proceed based on reality, not the report.
 
 Then apply the priority rules:
 
-1. **If VALIDATION_REPORT.md shows FAIL**: Your top priority is fixing the failures the validator found. Read the report carefully. Each failure includes the test name, what was expected, what happened, and a severity level. Fix failures in order of severity: CRITICAL > HIGH > MEDIUM > LOW. Do NOT move to new requirements until CRITICAL and HIGH failures are resolved.
+1. **If VALIDATION_REPORT.md shows FAIL**: Top priority is fixing the failures. Each failure includes the test name, what was expected, what happened, and severity. Fix in order CRITICAL > HIGH > MEDIUM > LOW. Do NOT move to new stories until CRITICAL and HIGH failures are resolved.
 
-2. **If VALIDATION_REPORT.md shows PASS or NOT YET RUN**: Pick **exactly ONE** unimplemented story from `prd.json` (lowest priority number with `passes: false`), implement it completely, and STOP.
+2. **If VALIDATION_REPORT.md shows PASS or NOT YET RUN**: Pick **exactly ONE** story from `prd.json` where `passes: false`, using the LOWEST `priority` number (negative priorities first — those are Phase 1 E2E tests). Implement that one story completely and STOP.
 
-3. **If VALIDATION_REPORT.md shows DONE but reality check found incomplete/broken work**: Update IMPLEMENTATION_PLAN.md to reflect actual state, then pick ONE broken item to fix and STOP.
-
-4. **If all stories genuinely pass and nothing is broken**: Update IMPLEMENTATION_PLAN.md status to COMPLETE, commit, and exit. The validator will verify.
+3. **If every `prd.json` story has `passes: true`**: Run the full test suite to confirm. If all pass, commit any pending notes and exit — the validator will set verdict to DONE. If tests fail despite `passes: true`, the prior coder lied — flip the lying stories back to `passes: false`, then pick the first failing story to fix.
 
 ## One Story Per Iteration — The Iron Rule
 
@@ -71,7 +70,8 @@ This is the most important rule in this skill. The harness derives its value fro
 
 ### What "commit and exit" means:
 - After the story is done, run its tests/typecheck to confirm it works in isolation.
-- Update `prd.json`: set `passes: true` on that one story. Update IMPLEMENTATION_PLAN.md: move the item from "Next Up" to "Completed", add one line of provenance.
+- **Update `prd.json`**: set `passes: true` on that one story. This is the only status bookkeeping you do — IMPLEMENTATION_PLAN.md tracks no status.
+- If you discovered a cross-cutting bug (one that doesn't map to your story), append a bullet under `## Known Issues` in IMPLEMENTATION_PLAN.md, prefixed with iteration number. If you made a significant architectural choice (e.g., chose a specific library), append under `## Decisions` with rationale. Do NOT put story status there.
 - `git add -A && git commit -m "[coder] US-XXX: brief description"`.
 - Return a short summary (1-3 sentences) and exit. Do NOT start another story.
 
@@ -92,8 +92,9 @@ You will be tempted to "just keep going" after finishing one story because you h
 ## What You Write
 
 - Application source code in `backend/` and `frontend/`
-- `IMPLEMENTATION_PLAN.md` — update after each unit of work: move items from "Next Up" to "Completed", add discovered issues to "Known Issues", note architectural decisions in "Decisions".
-- `AGENTS.md` — update ONLY with operational knowledge: build commands that work, commands that don't, patterns you established. Keep it brief. No status updates or progress notes.
+- `prd.json` — flip the `passes` field to `true` ONLY on the story you just completed. Nothing else in this file is yours to modify (titles, acceptance criteria, priorities, ordering are owned by the user).
+- `IMPLEMENTATION_PLAN.md` — **append only** to `## Known Issues` (cross-cutting bugs) and `## Decisions` (architectural choices with rationale). Never edit past entries. Never track story status here.
+- `AGENTS.md` — update with operational knowledge: build commands that work, commands that don't, patterns you established. Keep it brief. No status updates or progress notes.
 
 ## What You Do NOT Write
 

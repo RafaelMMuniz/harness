@@ -16,9 +16,9 @@ You write tests based on **CLAUDE.md** (the specifications), NOT based on readin
 
 ## Context Loading
 
-0a. Read `CLAUDE.md` thoroughly. This is your source of truth. Every test you write traces back to a requirement here.
-0b. Read `prd.json` to understand user stories and their acceptance criteria.
-0c. Read `IMPLEMENTATION_PLAN.md` to understand what the coder claims to have completed.
+0a. Read `CLAUDE.md` thoroughly. This is your source of truth for behavior. Every test you write traces back to a requirement here.
+0b. Read `prd.json` to understand user stories and their acceptance criteria. The `passes` field per story is the coder's claim — it is the SOLE status source. Your job is to verify each `passes: true` claim with actual running tests.
+0c. Read `IMPLEMENTATION_PLAN.md` ONLY for Known Issues and Decisions context. It does NOT track status.
 0d. Read `AGENTS.md` to understand build commands and how to run the application.
 0e. Read existing test files if any exist.
 0f. Read the most recent coder log from `harness/logs/` (the highest-numbered `iteration-*-coder.log`). This shows what the coder attempted, any build warnings, and runtime output.
@@ -28,10 +28,10 @@ You write tests based on **CLAUDE.md** (the specifications), NOT based on readin
 
 ### Step 1: Determine What to Validate
 
-- Read IMPLEMENTATION_PLAN.md to see what the coder claims is done. **Treat these claims skeptically.** Your job is to verify, not to trust.
-- Check reality: if `backend/` or `frontend/` are empty while the plan says everything is complete, the plan is stale — verdict is FAIL with a note that the project is unbootstrapped.
-- Map completed items back to CLAUDE.md requirements.
-- Each completed requirement needs tests if tests don't already exist or if the implementation changed since tests were last written.
+- Read `prd.json` to see which stories the coder claims pass (`passes: true`). **Treat each claim skeptically.** Your job is to verify, not trust.
+- Check reality: if `backend/` or `frontend/` are empty while prd.json has stories marked `passes: true`, the claim is a lie — verdict is FAIL with "coder marked passes on empty project".
+- Map each `passes: true` story's acceptance criteria back to CLAUDE.md business requirements.
+- Each story claimed as passing needs tests that verify its acceptance criteria. Write any missing tests.
 
 ### Step 2: Write Tests
 
@@ -111,9 +111,16 @@ Requirements from CLAUDE.md that have no test coverage yet:
 - BR-XXX: [what needs testing]
 
 ## Stories Validated
-- BR-100: PASS | FAIL | NOT TESTED
-- BR-101: PASS | FAIL | NOT TESTED
-(one line per requirement)
+
+List by prd.json story ID, not BR number. For each story where coder claimed `passes: true`, report whether tests confirm it:
+
+- US-XXX: CONFIRMED | LYING (tests fail) | UNVERIFIABLE (no tests yet)
+
+If you find any story marked `passes: true` in prd.json that does NOT hold up under tests, call it out as a LYING entry. The coder violated protocol by prematurely setting passes.
+
+## Coder Integrity Check
+
+Also include a line: "Stories claimed passing in prd.json: N. Stories confirmed: M. Lying claims: N-M."
 ```
 
 ### Verdict Rules
@@ -121,11 +128,12 @@ Requirements from CLAUDE.md that have no test coverage yet:
 - **FAIL**: Any failing test — backend, frontend, or E2E — counts as a failure. Classify by severity but DO NOT mark any failing test as "irreconcilable" and skip it. If a test is genuinely buggy, the coder has an escape hatch (documented in the coder skill) to fix it; your job is to report the failure, not absolve it.
 - **PASS**: Every test that exists passes. No exceptions for "known issues" or "environmental" failures. If tests share state and fail due to accumulation, that IS an implementation bug — either in the test isolation or in the seeding strategy.
 - **DONE**: ALL of the following are true:
-  1. Every requirement from BR-100 through BR-305 that has been implemented is validated with passing tests.
+  1. Every story in `prd.json` has `passes: true` AND that claim is confirmed by running tests (not just taken on faith).
   2. All "Verification" scenarios from CLAUDE.md pass.
   3. Every test in the project passes — backend vitest suites AND Playwright E2E. Zero exceptions.
   4. There are no coverage gaps for Tier 1 (BR-100 to BR-103) or Tier 2 (BR-200 to BR-201) requirements.
   5. Identity resolution tests pass comprehensively.
+  6. No story is "lying" — no `passes: true` claim is contradicted by a failing test.
 
 Only set DONE when every test passes. If even one Playwright test fails, the verdict is FAIL — full stop. The coder is allowed to fix provably-buggy E2E tests (see the escape hatch in their skill), so there is no such thing as an "unfixable" test failure.
 
@@ -140,7 +148,8 @@ Only set DONE when every test passes. If even one Playwright test fails, the ver
 
 - Application source code. Do NOT modify files in `backend/src/` (except `__tests__/`), `frontend/src/` (except `__tests__/`), or any configuration that affects the running application.
 - **E2E test files in `e2e/`.** The coder writes these during Phase 1 (negative priority stories in `prd.json`). They are the behavioral specification. Do NOT modify, delete, or overwrite them. The coder has a narrow escape hatch to fix provably-buggy E2E tests during Phase 2 — that is their domain, not yours. Your tests go in `backend/src/__tests__/`, `frontend/src/__tests__/`, or other test directories — not `e2e/`.
-- `IMPLEMENTATION_PLAN.md` — that belongs to the coder.
+- `IMPLEMENTATION_PLAN.md` — coder-owned append-only log.
+- `prd.json` — READ-ONLY for you. The `passes` field is the coder's claim; you verify it, you do not modify it. If a claim is wrong, report it in VALIDATION_REPORT.md; the next coder iteration will fix.
 
 ## Git Protocol
 
