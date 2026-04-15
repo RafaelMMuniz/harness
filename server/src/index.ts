@@ -1,8 +1,9 @@
 import express from 'express';
 import cors from 'cors';
 import { initializeDb } from './db.js';
+import { eventsRouter } from './routes/events.js';
 
-const app = express();
+export const app = express();
 const PORT = 3001;
 
 app.use(cors());
@@ -12,8 +13,12 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
 
+app.use('/api', eventsRouter);
+
 initializeDb();
 
-app.listen(PORT, () => {
-  console.log(`MiniPanel API running on port ${PORT}`);
-});
+if (!process.env.VITEST) {
+  app.listen(PORT, () => {
+    console.log(`MiniPanel API running on port ${PORT}`);
+  });
+}

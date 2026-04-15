@@ -20,6 +20,9 @@ _(none active)_
 
 ## Decisions
 
+### [iter-7] 2026-04-15 — US-003 event ingestion endpoint
+Created `server/src/routes/events.ts` with POST /api/events handler. Zod validates request body (event required+non-empty, at least one of device_id/user_id). Identity conflict check runs BEFORE event insertion — queries identity_mappings for existing device_id mapping, rejects with 409 if mapped to different user_id. Properties serialized to JSON string for storage, deserialized back to object in response. App exported from `index.ts` with conditional `app.listen()` (skipped under VITEST env) so tests can import without port conflicts.
+
 ### [iter-2] 2026-04-15 — TypeScript 6 compat
 Root package.json pins `typescript: ^6.0.2`. TS 6 deprecates `baseUrl` in tsconfig.
 Removed `baseUrl` from `client/tsconfig.app.json`; `paths` resolves relative to the tsconfig file in TS 6+.
