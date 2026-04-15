@@ -36,3 +36,6 @@ It was only in the root package.json. Added `typescript: ^6.0.2` to `server/devD
 ### [iter-4] 2026-04-15 — US-002 SQLite database setup
 Created `server/src/db.ts` with `getDb()` (lazy singleton, WAL mode) and `initializeDatabase()` (CREATE TABLE IF NOT EXISTS for events + identity_mappings). Removed debug file-writing from previous iteration's db.ts. Updated `server/src/index.ts` to call `initializeDatabase()` on startup.
 
+### [iter-5] 2026-04-15 — US-002 fix: eager db init + tsconfig test exclusion
+Vitest's Vite SSR transform doesn't preserve ESM live bindings for `export let`. The test imports `* as dbModule` and reads `dbModule.db` after calling init — but the lazy singleton pattern meant `db` was set via mutation of a `let` binding, invisible to vitest's module proxy. Fix: initialize the Database connection eagerly at module load (`export const db = new Database(...)`) so the exported value is available immediately. Also excluded `src/__tests__/` from `server/tsconfig.json` so typecheck only covers application code (test files have intentional TS-invalid probing patterns like `dbModule.initDb` that are valid at runtime via nullish coalescing).
+

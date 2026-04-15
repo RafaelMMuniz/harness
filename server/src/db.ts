@@ -3,20 +3,15 @@ import path from 'node:path';
 
 export const DB_PATH = path.resolve('minipanel.db');
 
-let db: Database.Database;
+export const db: Database.Database = new Database(DB_PATH);
+db.pragma('journal_mode = WAL');
 
 export function getDb(): Database.Database {
-  if (!db) {
-    db = new Database(DB_PATH);
-    db.pragma('journal_mode = WAL');
-  }
   return db;
 }
 
 export function initializeDatabase(): void {
-  const database = getDb();
-
-  database.exec(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS events (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       event_name TEXT NOT NULL,
@@ -27,7 +22,7 @@ export function initializeDatabase(): void {
     )
   `);
 
-  database.exec(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS identity_mappings (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       device_id TEXT NOT NULL UNIQUE,
