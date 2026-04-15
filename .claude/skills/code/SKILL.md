@@ -45,23 +45,46 @@ After completing each implementation story, run the Playwright test command spec
 ## Decision: What to Work On
 
 **BEFORE applying the rules below, sanity check reality:**
-- If `backend/` and `frontend/` contain only `.gitkeep` (or are empty), the project is unbootstrapped. Ignore any claim in IMPLEMENTATION_PLAN.md or VALIDATION_REPORT.md that work is complete — it is stale. Start from scratch: bootstrap the project per Phase 1 (prd.json negative-priority stories), then move to Phase 2.
-- If VALIDATION_REPORT.md says DONE but the implementation clearly doesn't satisfy the spec (missing pages, broken endpoints, sample data that contradicts BR-102), ALSO ignore that report. The prior validator was wrong. Start fixing based on what the code and spec actually say.
+- If `backend/` and `frontend/` contain only `.gitkeep` (or are empty), the project is unbootstrapped. Ignore any claim in IMPLEMENTATION_PLAN.md or VALIDATION_REPORT.md that work is complete — it is stale. Start from scratch.
+- If VALIDATION_REPORT.md says DONE but the implementation clearly doesn't satisfy the spec (missing pages, broken endpoints, sample data that contradicts BR-102), ALSO ignore that report. The prior validator was wrong.
 
 Then apply the priority rules:
 
 1. **If VALIDATION_REPORT.md shows FAIL**: Your top priority is fixing the failures the validator found. Read the report carefully. Each failure includes the test name, what was expected, what happened, and a severity level. Fix failures in order of severity: CRITICAL > HIGH > MEDIUM > LOW. Do NOT move to new requirements until CRITICAL and HIGH failures are resolved.
 
-2. **If VALIDATION_REPORT.md shows PASS or NOT YET RUN**: Pick the next unimplemented requirement from IMPLEMENTATION_PLAN.md, following the priority order. Implement it completely. No stubs, no placeholders, no "TODO" comments.
+2. **If VALIDATION_REPORT.md shows PASS or NOT YET RUN**: Pick **exactly ONE** unimplemented story from `prd.json` (lowest priority number with `passes: false`), implement it completely, and STOP.
 
-3. **If VALIDATION_REPORT.md shows DONE but you just ran the reality check above and found the implementation is incomplete or broken**: Update IMPLEMENTATION_PLAN.md to reflect actual state (move broken items back to "In Progress"), commit, and start fixing. The next validator run will reset the verdict.
+3. **If VALIDATION_REPORT.md shows DONE but reality check found incomplete/broken work**: Update IMPLEMENTATION_PLAN.md to reflect actual state, then pick ONE broken item to fix and STOP.
 
-4. **If all requirements are genuinely implemented and validation genuinely passes**: Update IMPLEMENTATION_PLAN.md status to COMPLETE. The validator will verify and set the verdict to DONE.
+4. **If all stories genuinely pass and nothing is broken**: Update IMPLEMENTATION_PLAN.md status to COMPLETE, commit, and exit. The validator will verify.
+
+## One Story Per Iteration — The Iron Rule
+
+**You work on exactly ONE prd.json story per invocation. Then you commit and exit.**
+
+This is the most important rule in this skill. The harness derives its value from the feedback loop between coder and validator. If you implement 10 stories in one iteration, the validator faces a 10-story review and any bug gets buried in a giant diff. Worse: you've burned iterations worth of budget on one shot, leaving no room for course correction.
+
+### What "ONE story" means:
+- ONE item from `prd.json.userStories` with `passes: false`. Use the lowest `priority` number first (negative priorities = Phase 1 E2E tests, run FIRST; priority 1+ = Phase 2 implementation).
+- Complete ALL acceptance criteria for that story — not "implement BR-200 somewhat." Finish the story fully.
+- Related work that is clearly part of the same story (e.g., adding a config file for the same framework) is fine. Pulling in the next story because "it's easy" or "I have context" is forbidden.
+
+### What "commit and exit" means:
+- After the story is done, run its tests/typecheck to confirm it works in isolation.
+- Update `prd.json`: set `passes: true` on that one story. Update IMPLEMENTATION_PLAN.md: move the item from "Next Up" to "Completed", add one line of provenance.
+- `git add -A && git commit -m "[coder] US-XXX: brief description"`.
+- Return a short summary (1-3 sentences) and exit. Do NOT start another story.
+
+### Exception: fixing validation failures
+When VALIDATION_REPORT.md shows FAIL, rule 1 applies. You may fix multiple CRITICAL/HIGH failures in one iteration if they're clearly related (e.g., all caused by the same bug) — but prefer focused commits. The one-story rule is about NEW work, not about fix batches.
+
+### The psychological trap
+You will be tempted to "just keep going" after finishing one story because you have context, the code is fresh, and it feels efficient. **Resist this.** The harness will invoke you again with equally rich context thanks to your logs and updated plan files. Each iteration is a natural checkpoint. Fight the urge to ship a mega-commit.
 
 ## Implementation Rules
 
 - **Follow the design system for all frontend work.** Before writing any UI code — components, pages, layouts, charts, styling — read `.claude/skills/minipanel-design/SKILL.md` and load the specific reference file you need from `.claude/skills/minipanel-design/references/` (design tokens, component patterns, or page layouts). Do not invent colors, typography, spacing, or component styles. Use the design skill as the source of truth for all visual decisions.
-- **Complete implementations only.** Every function must work. Every endpoint must return real data. Every UI component must render and be interactive. Partial work wastes two agents' time.
+- **Complete the current story.** The story you're working on must be fully implemented — every function works, every endpoint returns real data, every UI component renders and is interactive. "Complete" means "this story's acceptance criteria are all met." It does NOT mean "finish the whole project in one go." Remember the Iron Rule above.
 - **Identity resolution is sacred.** Every query that touches user identity MUST go through the resolution layer. If you find yourself writing `WHERE user_id = ?` without considering device mappings, stop and fix it. Read BR-101 in CLAUDE.md until you can recite the merge rules.
 - **Use subagents for parallelism**: Up to 200 parallel Sonnet subagents for file reads and code searches. 1 Sonnet subagent for builds and test runs (sequential filesystem access). Opus subagent for complex debugging or architectural reasoning.
 - **Verify before committing**: Run the typecheck and any existing tests. If tests fail, fix them. If tests unrelated to your work fail, fix them too — the codebase must always be green.
@@ -96,7 +119,7 @@ If you encounter a problem you cannot solve:
 
 99. When you learn operational knowledge (correct commands, patterns, gotchas), update AGENTS.md.
 999. Keep IMPLEMENTATION_PLAN.md current. Future-you and the validator depend on it.
-9999. Implement completely. No stubs. No TODOs. No "will implement later."
+9999. Implement the CURRENT story completely — no stubs, no TODOs, no "will implement later". But also: do NOT pull in the next story. Stop when your one story is done.
 99999. If VALIDATION_REPORT.md identifies a bug in your implementation, the validator is probably right. Fix the code, don't argue with the test. The escape hatch: if you genuinely believe the test misreads the spec, note your reasoning in IMPLEMENTATION_PLAN.md under "Known Issues" with spec citations.
 999999. When IMPLEMENTATION_PLAN.md grows large, clean out completed items periodically — keep only the last few completions for context, move the rest to a "History" section or remove them.
 9999999. If you find inconsistencies in the specs, note them in IMPLEMENTATION_PLAN.md and make a judgment call. Prefer the interpretation that better serves the users described in CLAUDE.md.
