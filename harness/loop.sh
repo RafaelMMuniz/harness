@@ -321,11 +321,29 @@ while true; do
   STORY_ID=$(jq -r '[.userStories[] | select(.passes == false)] | sort_by(.priority) | .[0].id // empty' prd.json 2>/dev/null)
   STORY_TITLE=$(jq -r '[.userStories[] | select(.passes == false)] | sort_by(.priority) | .[0].title // empty' prd.json 2>/dev/null)
 
-  # Token counts from coder + validator logs
+  # Token counts from coder + validator logs. parse_stream.js emits a STATS
+  # footer line (e.g. `STATS input_tokens:123 output_tokens:45 cache_read:6 ...`)
+  # that these greps pick up.
   CODER_LOG="$LOG_DIR/iteration-${ITER_PAD}-coder.log"
-  INPUT_TOKENS=$(grep -oE 'input_tokens[": ]+[0-9]+' "$CODER_LOG" 2>/dev/null | grep -oE '[0-9]+' | tail -1)
-  OUTPUT_TOKENS=$(grep -oE 'output_tokens[": ]+[0-9]+' "$CODER_LOG" 2>/dev/null | grep -oE '[0-9]+' | tail -1)
-  CACHE_READ=$(grep -oE 'cache_read[": ]+[0-9]+' "$CODER_LOG" 2>/dev/null | grep -oE '[0-9]+' | tail -1)
+  VALIDATOR_LOG="$LOG_DIR/iteration-${ITER_PAD}-validator.log"
+  parse_stat() {
+    # $1 = field name, $2+ = log files; sums the field across all logs.
+    local field="$1"; shift
+    local total=0 val
+    for f in "$@"; do
+      [ -f "$f" ] || continue
+      val=$(grep -oE "${field}:[0-9]+" "$f" 2>/dev/null | grep -oE '[0-9]+$' | tail -1)
+      total=$((total + ${val:-0}))
+    done
+    echo "$total"
+  }
+  INPUT_TOKENS=$(parse_stat 'input_tokens' "$CODER_LOG" "$VALIDATOR_LOG")
+  OUTPUT_TOKENS=$(parse_stat 'output_tokens' "$CODER_LOG" "$VALIDATOR_LOG")
+  CACHE_READ=$(parse_stat 'cache_read' "$CODER_LOG" "$VALIDATOR_LOG")
+  CACHE_WRITE=$(parse_stat 'cache_write' "$CODER_LOG" "$VALIDATOR_LOG")
+  # cost is a float — sum with awk
+  COST=$(awk 'BEGIN{s=0} /STATS .* cost_usd:/ {match($0,/cost_usd:[0-9.]+/); if(RSTART){v=substr($0,RSTART+9,RLENGTH-9); s+=v}} END{printf "%.6f", s}' \
+    "$CODER_LOG" "$VALIDATOR_LOG" 2>/dev/null || echo 0)
 
   curl -s --max-time 5 -X POST "$MONITOR_URL" \
     -H 'Content-Type: application/json' \
@@ -337,10 +355,10 @@ while true; do
       \"input_tokens\": ${INPUT_TOKENS:-0},
       \"output_tokens\": ${OUTPUT_TOKENS:-0},
       \"cache_read_tokens\": ${CACHE_READ:-0},
-      \"cache_write_tokens\": 0,
+      \"cache_write_tokens\": ${CACHE_WRITE:-0},
       \"duration_seconds\": $ITER_DURATION,
       \"passed\": $ITER_PASSED,
-      \"cost\": 0
+      \"cost\": ${COST:-0}
     }" > /dev/null 2>&1 || true
   # ──────────────────────────────────────────────────────────
 
